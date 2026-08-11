@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    // Nest wipes dist before each build (deleteOutDir). Keeping the incremental
+    // build-info file inside dist means it is cleared at the same moment —
+    // otherwise tsc believes untouched files are still emitted and produces a
+    // silently incomplete bundle that only fails at require time.
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "prisma"]
+}

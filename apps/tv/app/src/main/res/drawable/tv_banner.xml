@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder only — replace with real 320x180 banner artwork before a Play Store submission. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path android:pathData="M0,0h320v180h-320z" android:fillColor="#0E0B08" />
+    <path android:pathData="M24,140h60v8h-60z" android:fillColor="#C8963E" />
+</vector>

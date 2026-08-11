@@ -1,0 +1,23 @@
+{
+  "name": "ott-platform",
+  "private": true,
+  "packageManager": "pnpm@10.8.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm --filter @ott/shared build && pnpm --filter @ott/api build && pnpm --filter @ott/web build",
+    "start": "pm2 start ops/ecosystem.config.js",
+    "db:migrate": "pnpm --filter @ott/api db:migrate",
+    "db:push": "pnpm --filter @ott/api db:push",
+    "db:studio": "pnpm --filter @ott/api db:studio",
+    "seed": "pnpm --filter @ott/api seed",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @ott/api test"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

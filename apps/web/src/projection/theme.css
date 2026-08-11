@@ -1,0 +1,220 @@
+/*
+ * Projection design tokens.
+ *
+ * Additive only — every name here is new, so importing this changes nothing
+ * about the existing UI. Screens opt in by using the components in
+ * src/projection; the old components keep their own tokens until Phase 8
+ * removes them.
+ */
+
+@theme {
+  /* Ground. Warm near-black rather than pure, so brass sits on it without
+     looking like a colour cast. */
+  --color-night: #0a0908;
+  --color-night-2: #12100d;
+  --color-night-3: #1a1713;
+  --color-hairline: #241f1a;
+
+  /* The accent. Deliberately not red — red belongs to Netflix, YouTube and
+     Playboox, and using it guarantees looking like a follower. */
+  --color-brass: #c8963e;
+  --color-brass-hot: #f2d06b;
+
+  /* Text. Bone rather than white; ash carries a warm bias to match the ground. */
+  --color-bone: #ede6da;
+  --color-ash: #8a8177;
+  --color-ash-dim: #5c554d;
+
+  /* Status, kept separate from the accent so "live" never reads as a button. */
+  --color-signal-ok: #7fa86b;
+  --color-signal-warn: #c8963e;
+  --color-signal-bad: #b4553f;
+
+  --font-projection: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-projection-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --ease-lamp: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+  /* The signature: a torn-ticket chamfer on the top-right of every surface.
+     One shape language repeated is what makes an interface recognisable. */
+  --chamfer-lg: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+  --chamfer-md: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+  --chamfer-sm: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 0 100%);
+
+  /* Film grain, inline so nothing is fetched at runtime. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+.chamfer-lg {
+  clip-path: var(--chamfer-lg);
+}
+.chamfer-md {
+  clip-path: var(--chamfer-md);
+}
+.chamfer-sm {
+  clip-path: var(--chamfer-sm);
+}
+
+/* Grain sits above artwork but below text. */
+.grain-over::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--grain);
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+/*
+ * Focus is the one place the design uses a hard edge instead of light. A
+ * keyboard or TV remote needs an unmistakable boundary, and prettiness loses
+ * to navigability there.
+ */
+.focus-brass:focus-visible {
+  outline: 2px solid var(--color-brass-hot);
+  outline-offset: 3px;
+}
+
+/* Uppercase micro-labels: the mono voice used for counts, times and eyebrows. */
+.label-mono {
+  font-family: var(--font-projection-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/*
+ * Shelf cards.
+ *
+ * Fixed widths rather than fractional columns: at 1900px a 1fr column makes a
+ * 2:3 poster roughly 400×600, which swamps the page. A constant size also means
+ * a card looks the same on every screen.
+ *
+ * Hovering expands a card into the wide treatment and pushes the rest along.
+ * One card rests expanded — the anchor — and yields as soon as the pointer
+ * enters the shelf, so there is never more than one wide card at a time.
+ */
+.shelf-row {
+  --card-rest: clamp(112px, 9vw, 148px);
+  --card-wide: clamp(240px, 21vw, 340px);
+  --card-h: clamp(168px, 13.5vw, 222px);
+
+  /*
+   * Hover intent. Expanding waits; collapsing does not.
+   *
+   * A pointer crossing a shelf on its way somewhere else passes over each card
+   * in well under 150ms, and without this every one of them starts animating —
+   * which is what makes a quick sweep look like it is stuttering. A CSS delay
+   * is enough on its own: if the pointer leaves before the delay elapses the
+   * transition never starts, so only a card you actually settle on responds.
+   */
+  --intent-in: 150ms;
+  --intent-out: 80ms;
+}
+
+.shelf-card {
+  width: var(--card-rest);
+  height: var(--card-h);
+  transition: width 300ms var(--ease-lamp) var(--intent-out);
+}
+
+.shelf-card.is-anchor {
+  width: var(--card-wide);
+}
+
+/* Touch has no hover, so the anchor simply stays expanded there. */
+@media (hover: hover) {
+  .shelf-row:hover .shelf-card.is-anchor {
+    width: var(--card-rest);
+    transition-delay: var(--intent-in);
+  }
+  /* Last, so the pointed-at card wins over the resting anchor rule above. */
+  .shelf-row .shelf-card:hover,
+  .shelf-row .shelf-card:focus-visible {
+    width: var(--card-wide);
+    transition-delay: var(--intent-in);
+  }
+}
+
+/*
+ * Artwork follows the width: portrait art while narrow, the backdrop once wide.
+ * Same cascade as the widths above so the two can never disagree.
+ */
+.shelf-card .art-wide,
+.shelf-card .art-tall,
+.shelf-card .on-wide {
+  /* Same delays as the width, so the artwork can never lead or lag it. */
+  transition: opacity 300ms var(--ease-lamp) var(--intent-out);
+}
+.shelf-card .art-wide,
+.shelf-card .on-wide {
+  opacity: 0;
+}
+.shelf-card .art-tall {
+  opacity: 1;
+}
+
+.shelf-card.is-anchor .art-wide,
+.shelf-card.is-anchor .on-wide {
+  opacity: 1;
+}
+.shelf-card.is-anchor .art-tall {
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  .shelf-row:hover .shelf-card.is-anchor .art-wide,
+  .shelf-row:hover .shelf-card.is-anchor .on-wide {
+    opacity: 0;
+    transition-delay: var(--intent-in);
+  }
+  .shelf-row:hover .shelf-card.is-anchor .art-tall {
+    opacity: 1;
+    transition-delay: var(--intent-in);
+  }
+
+  .shelf-row .shelf-card:hover .art-wide,
+  .shelf-row .shelf-card:focus-visible .art-wide,
+  .shelf-row .shelf-card:hover .on-wide,
+  .shelf-row .shelf-card:focus-visible .on-wide {
+    opacity: 1;
+    transition-delay: var(--intent-in);
+  }
+  .shelf-row .shelf-card:hover .art-tall,
+  .shelf-row .shelf-card:focus-visible .art-tall {
+    opacity: 0;
+    transition-delay: var(--intent-in);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shelf-card,
+  .shelf-card .art-wide,
+  .shelf-card .art-tall,
+  .shelf-card .on-wide {
+    transition: none;
+  }
+}
+
+/* Live marker. A slow lamp pulse rather than a blinking red dot. */
+@keyframes pulse-lamp {
+  0% {
+    box-shadow: 0 0 0 0 rgb(242 208 107 / 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgb(242 208 107 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(242 208 107 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-lamp,
+  .motion-lamp * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

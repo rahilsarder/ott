@@ -1,0 +1,300 @@
+'use client';
+
+import Image from 'next/image';
+import Link from 'next/link';
+import { use, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import type { Paginated, TitleCard as TitleCardModel, TitleDetail } from '@ott/shared';
+import { api } from '@/lib/api';
+import { useSession } from '@/lib/session';
+import { useWatchlist } from '@/lib/use-watchlist';
+import { cn, formatDuration, formatRating } from '@/lib/format';
+import { AuthGate } from '@/components/AuthGate';
+import { PersonCard, PosterCard } from '@/projection/cards';
+import { EpisodeRow, SeasonPicker } from '@/projection/episodes';
+import { TabBar, TopNav } from '@/projection/shell';
+import { TrailerModal } from '@/projection/TrailerModal';
+import { Button, SectionHead } from '@/projection/ui';
+
+export default function TitlePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params);
+  return (
+    <AuthGate>
+      <TitleView slug={slug} />
+    </AuthGate>
+  );
+}
+
+function TitleView({ slug }: { slug: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { profile, user } = useSession();
+  const [seasonIndex, setSeasonIndex] = useState(0);
+
+  const { data: title, isLoading } = useQuery({
+    queryKey: ['title', slug, profile?.id],
+    queryFn: () => api<TitleDetail>(`/catalog/titles/${slug}`),
+  });
+
+  const playHref = title?.resume
+    ? `/watch/${title.resume.kind}/${title.resume.id}`
+    : title?.type === 'MOVIE'
+      ? `/watch/movie/${title.id}`
+      : null;
+
+  // `?play=1` from a card's play button starts without a second click.
+  useEffect(() => {
+    if (title && playHref && searchParams.get('play') === '1') router.replace(playHref);
+  }, [title, playHref, searchParams, router]);
+
+  if (isLoading || !title) {
+    return (
+      <div className="min-h-dvh bg-night font-projection text-bone">
+        <TopNav />
+        <div className="px-4 pt-6 md:px-12">
+          <div className="chamfer-lg aspect-[3/4] animate-pulse bg-night-2 sm:aspect-[16/9] md:aspect-[21/9]" />
+        </div>
+      </div>
+    );
+  }
+
+  const season = title.seasons[seasonIndex];
+
+  return (
+    <div className="min-h-dvh bg-night pb-24 font-projection text-bone md:pb-16">
+      <TopNav />
+
+      <Hero title={title} playHref={playHref} />
+
+      <div className="grid gap-10 px-4 pt-8 md:grid-cols-[minmax(0,1fr)_240px] md:px-12">
+        <div className="flex min-w-0 flex-col gap-10">
+          {title.type === 'SERIES' && title.seasons.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <SectionHead
+                title="Episodes"
+                meta={season ? `${season.name || `Season ${season.number}`} · ${season.episodes.length} episodes` : undefined}
+              />
+              <SeasonPicker seasons={title.seasons} activeIndex={seasonIndex} onSelect={setSeasonIndex} />
+
+              <div className="-mx-4 flex flex-col md:mx-0">
+                {season?.episodes.map((episode) => (
+                  <EpisodeRow key={episode.id} episode={episode} href={`/watch/episode/${episode.id}`} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {title.cast.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <SectionHead title="Cast" meta={`${title.cast.length} credited`} />
+              <div className="no-scrollbar flex gap-4 overflow-x-auto pb-1">
+                {title.cast.map((person) => (
+                  <PersonCard key={`${person.personId}-${person.role}`} person={person} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {title.crew.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <SectionHead title="Crew" />
+              <div className="no-scrollbar flex gap-4 overflow-x-auto pb-1">
+                {title.crew.map((person) => (
+                  <PersonCard key={`${person.personId}-${person.role}`} person={person} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          <MoreLikeThis title={title} />
+        </div>
+
+        <Facts title={title} />
+      </div>
+
+      {playHref && <StickyResume title={title} playHref={playHref} />}
+      <TabBar />
+    </div>
+  );
+}
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+
+function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null }) {
+  const { inList, toggle, pending } = useWatchlist(title.id);
+  const [showTrailer, setShowTrailer] = useState(false);
+
+  const facts = [
+    formatRating(title.rating),
+    title.year ? String(title.year) : '',
+    title.type === 'SERIES'
+      ? `${title.seasons.length} season${title.seasons.length === 1 ? '' : 's'} · ${title.seasons.reduce((n, s) => n + s.episodes.length, 0)} episodes`
+      : formatDuration(title.durationSec),
+    title.genres.map((g) => g.name).join(' · '),
+  ].filter(Boolean);
+
+  return (
+    <section className="relative px-4 pt-6 md:px-12 md:pt-8">
+      <div className="chamfer-lg grain-over relative aspect-[3/4] overflow-hidden bg-night-3 shadow-[0_0_90px_rgb(200_150_62/0.10)] sm:aspect-[16/9] md:aspect-[21/9]">
+        {(title.posterUrl ?? title.backdropUrl) && (
+          <Image
+            src={(title.posterUrl ?? title.backdropUrl)!}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover sm:hidden"
+          />
+        )}
+        {title.backdropUrl && (
+          <Image src={title.backdropUrl} alt="" fill priority sizes="100vw" className="hidden object-cover sm:block" />
+        )}
+        <span
+          className="absolute inset-0"
+          style={{ background: 'radial-gradient(70% 90% at 58% 45%, transparent 28%, rgb(10 9 8 / 0.88) 100%)' }}
+        />
+        <span className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-night via-night/80 to-transparent md:hidden" />
+      </div>
+
+      {/*
+        A constant lift, not one that grows with the breakpoint.
+        The row below the heading sits at (frameBottom − lift + headingHeight +
+        gap), so as long as the lift stays under the heading's own height it can
+        never reach the frame — at any width. Scaling the lift instead means
+        re-checking every viewport, which is how the metadata ended up behind
+        the artwork twice.
+      */}
+      <div className="absolute inset-x-4 bottom-4 z-2 flex max-w-2xl flex-col gap-3 md:static md:-mt-10 md:ml-6">
+        <h1 className="text-[clamp(2rem,5.5vw,3.75rem)] leading-[0.92] font-semibold tracking-[-0.045em] text-balance drop-shadow-[0_6px_40px_rgb(10_9_8/0.9)]">
+          {title.name}
+        </h1>
+
+        <div className="flex flex-wrap items-center gap-2.5 text-xs text-ash md:text-sm">
+          {facts.map((fact, index) => (
+            <span key={fact} className="flex items-center gap-2.5">
+              {index > 0 && <span aria-hidden className="size-[3px] rounded-full bg-ash-dim" />}
+              {index === 0 && title.rating ? (
+                <span className="label-mono border border-ash-dim px-1.5 py-0.5 text-bone">{fact}</span>
+              ) : (
+                <span>{fact}</span>
+              )}
+            </span>
+          ))}
+        </div>
+
+        <p className="line-clamp-3 max-w-[52ch] text-sm text-ash">{title.synopsis || 'No synopsis available.'}</p>
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {playHref ? (
+            <Link href={playHref} className="contents">
+              <Button>▶ {title.resume?.label ?? 'Play'}</Button>
+            </Link>
+          ) : (
+            /* No stream anywhere in this title — say so rather than offering a
+               button that leads nowhere. */
+            <span className="label-mono border border-hairline px-3 py-2.5 text-ash-dim">Not available yet</span>
+          )}
+          <Button variant="quiet" onClick={() => void toggle()} disabled={pending} aria-pressed={inList}>
+            {inList ? '✓ Saved' : '＋ Save'}
+          </Button>
+          {title.trailerYoutubeId && (
+            <Button variant="ghost" onClick={() => setShowTrailer(true)}>
+              ▶ Trailer
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {showTrailer && title.trailerYoutubeId && (
+        <TrailerModal youtubeId={title.trailerYoutubeId} onClose={() => setShowTrailer(false)} />
+      )}
+    </section>
+  );
+}
+
+/* ── Side column ─────────────────────────────────────────────────────────── */
+
+function Facts({ title }: { title: TitleDetail }) {
+  const directors = title.crew.filter((c) => c.role === 'Director');
+  const writers = title.crew.filter((c) => c.role === 'Writer' || c.role === 'Screenplay');
+
+  const rows = [
+    directors.length > 0 && { label: 'Director', value: directors.map((d) => d.name).join(', ') },
+    writers.length > 0 && { label: 'Writer', value: writers.map((w) => w.name).join(', ') },
+    title.genres.length > 0 && { label: 'Genres', value: title.genres.map((g) => g.name).join(', ') },
+    title.rating && { label: 'Rating', value: formatRating(title.rating) },
+    title.year && { label: 'Released', value: String(title.year) },
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  if (rows.length === 0) return null;
+
+  return (
+    <aside className="flex flex-col gap-4 md:pt-4">
+      {rows.map((row) => (
+        <section key={row.label} className="flex flex-col gap-1">
+          <h3 className="label-mono text-ash-dim">{row.label}</h3>
+          <p className="text-sm text-ash">{row.value}</p>
+        </section>
+      ))}
+    </aside>
+  );
+}
+
+/* ── Related ─────────────────────────────────────────────────────────────── */
+
+/** Drawn from the first genre — no dedicated endpoint needed for a simple shelf. */
+function MoreLikeThis({ title }: { title: TitleDetail }) {
+  const genre = title.genres[0];
+
+  const { data } = useQuery({
+    queryKey: ['related', genre?.slug, title.id],
+    queryFn: () => api<Paginated<TitleCardModel>>(`/catalog/titles?genre=${genre!.slug}&perPage=12`),
+    enabled: Boolean(genre),
+  });
+
+  const related = useMemo(() => (data?.items ?? []).filter((t) => t.id !== title.id).slice(0, 8), [data, title.id]);
+  if (related.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-4">
+      <SectionHead title="More like this" meta={genre?.name} href={genre ? `/browse/${genre.slug}` : undefined} />
+      <div className="no-scrollbar flex gap-3 overflow-x-auto pb-1">
+        {related.map((item) => (
+          <PosterCard key={item.id} title={item} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ── Sticky resume ───────────────────────────────────────────────────────── */
+
+/**
+ * Appears on a phone once the hero has scrolled away, so a long episode list is
+ * never more than a tap from continuing.
+ */
+function StickyResume({ title, playHref }: { title: TitleDetail; playHref: string }) {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 320);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  return (
+    <div
+      className={cn(
+        'fixed inset-x-0 bottom-[4.5rem] z-40 flex items-center gap-3 border-y border-hairline bg-night/95 px-4 py-2.5 backdrop-blur transition-all md:hidden',
+        show ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
+      )}
+    >
+      <b className="truncate text-xs font-semibold">{title.name}</b>
+      <Link href={playHref} className="contents">
+        <Button className="ml-auto shrink-0 px-3 py-1.5 text-[0.6875rem]">▶ {title.resume?.label ?? 'Play'}</Button>
+      </Link>
+    </div>
+  );
+}

@@ -1,0 +1,372 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum TitleType {
+  MOVIE
+  SERIES
+}
+
+enum MaturityRating {
+  G
+  PG
+  PG_13
+  R
+  NC_17
+  TV_Y
+  TV_G
+  TV_PG
+  TV_14
+  TV_MA
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  /// Null for accounts created via Google sign-in only.
+  passwordHash String?
+  /// Google's stable subject id. Set once a Google-authenticated sign-in has
+  /// linked to (or created) this account.
+  googleId     String?  @unique
+  /// Google's profile photo URL, refreshed on every Google sign-in. Null for
+  /// password-only accounts — the UI falls back to an initial-letter avatar.
+  avatarUrl    String?
+  role         UserRole @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profiles           Profile[]
+  refreshTokens      RefreshToken[]
+  deviceAuthRequests DeviceAuthRequest[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  familyId  String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+}
+
+enum DeviceAuthStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+/// A TV/device pairing request created by `POST /devices/start`. Approved by
+/// an already-authenticated browser via userCode, then consumed exactly once
+/// by the polling device via deviceCode — see apps/api/src/devices.
+model DeviceAuthRequest {
+  id             String           @id @default(cuid())
+  deviceCodeHash String           @unique
+  userCode       String           @unique
+  status         DeviceAuthStatus @default(PENDING)
+  userId         String?
+  lastPolledAt   DateTime?
+  consumedAt     DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model Profile {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  avatarKey String   @default("red")
+  isKids    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  progress  WatchProgress[]
+  watchlist WatchlistItem[]
+  plays     PlayEvent[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Genre {
+  id     String       @id @default(cuid())
+  slug   String       @unique
+  name   String
+  titles TitleGenre[]
+}
+
+enum CreditKind {
+  CAST
+  CREW
+}
+
+/// A person imported from TMDB. `tmdbId` is the identity key so repeated
+/// imports across different titles reuse one row rather than duplicating.
+model Person {
+  id          String   @id @default(cuid())
+  tmdbId      Int      @unique
+  name        String
+  profilePath String?
+  biography   String   @default("")
+  knownFor    String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  credits Credit[]
+
+  @@index([name])
+}
+
+model Credit {
+  id       String     @id @default(cuid())
+  titleId  String
+  personId String
+  kind     CreditKind @default(CAST)
+  /// Role name for cast; job title (Director, Writer…) for crew.
+  role     String     @default("")
+  /// TMDB billing order. Drives display order of the cast row.
+  order    Int        @default(0)
+
+  title  Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([titleId, personId, kind, role])
+  @@index([titleId, kind, order])
+  @@index([personId])
+}
+
+model Title {
+  id               String          @id @default(cuid())
+  type             TitleType
+  slug             String          @unique
+  name             String
+  synopsis         String          @default("")
+  year             Int?
+  rating           MaturityRating?
+  durationSec      Int?
+  posterUrl        String?
+  backdropUrl      String?
+  logoUrl          String?
+  /// Bare YouTube video id (e.g. `dQw4w9WgXcQ`), not a URL — most trailers for
+  /// this catalog only exist on YouTube, so the player embeds rather than
+  /// streaming a Flussonic asset.
+  trailerYoutubeId String?
+  /// Flussonic stream name for MOVIE titles. SERIES carry it per-episode.
+  streamPath       String?
+  /// TMDB id this title was imported from. Scoped by `type`, since TMDB numbers
+  /// movies and TV shows in separate namespaces and ids do collide.
+  tmdbId           Int?
+  tmdbSyncedAt     DateTime?
+  /// ISO 639-1 from TMDB (`ml`, `hi`, `bn`). The highest-value browse filter
+  /// for a multi-language catalogue, and the only language signal available
+  /// before per-file audio tracks are read in a later phase.
+  originalLanguage String?
+  /// Name reduced by normalizeSearch() — punctuation and spacing removed — so
+  /// "spiderman" and "spider man" both find "Spider-Man". Trigram-indexed for
+  /// typo tolerance.
+  searchText       String          @default("")
+  isPublished      Boolean         @default(false)
+  publishedAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  genres    TitleGenre[]
+  seasons   Season[]
+  episodes  Episode[]
+  credits   Credit[]
+  progress  WatchProgress[]
+  watchlist WatchlistItem[]
+  plays     PlayEvent[]
+  subtitles Subtitle[]
+
+  @@unique([type, tmdbId])
+  @@index([isPublished, publishedAt])
+  @@index([type])
+  /// Browse pages keyset-paginate on (publishedAt, id) within a filter set.
+  @@index([isPublished, publishedAt, id])
+  @@index([originalLanguage])
+}
+
+model TitleGenre {
+  titleId String
+  genreId String
+
+  title Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([titleId, genreId])
+  @@index([genreId])
+}
+
+model Season {
+  id      String @id @default(cuid())
+  titleId String
+  number  Int
+  name    String @default("")
+
+  title    Title     @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episodes Episode[]
+
+  @@unique([titleId, number])
+  @@index([titleId])
+}
+
+model Episode {
+  id          String    @id @default(cuid())
+  titleId     String
+  seasonId    String
+  number      Int
+  name        String
+  synopsis    String    @default("")
+  stillUrl    String?
+  durationSec Int?
+  airDate     DateTime?
+  /// Empty until an admin attaches a stream. TMDB import creates episodes with
+  /// metadata only, so the catalog can be built before the files land.
+  streamPath  String    @default("")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  title     Title           @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  season    Season          @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  progress  WatchProgress[]
+  plays     PlayEvent[]
+  subtitles Subtitle[]
+
+  @@unique([seasonId, number])
+  @@index([titleId])
+}
+
+model Channel {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String   @default("")
+  category    String   @default("General")
+  logoUrl     String?
+  streamPath  String
+  hasDvr      Boolean  @default(false)
+  /// See Title.searchText.
+  searchText  String   @default("")
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  programmes Programme[]
+  plays      PlayEvent[]
+
+  @@index([isPublished, sortOrder])
+  @@index([category])
+}
+
+model Programme {
+  id          String   @id @default(cuid())
+  channelId   String
+  title       String
+  description String   @default("")
+  startsAt    DateTime
+  endsAt      DateTime
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, startsAt])
+  @@index([channelId, startsAt, endsAt])
+}
+
+model WatchProgress {
+  id          String    @id @default(cuid())
+  profileId   String
+  titleId     String
+  episodeId   String?
+  /// Mirrors episodeId with "" standing in for NULL. Postgres treats NULLs as
+  /// distinct, so a unique index over episodeId would let a movie accumulate
+  /// duplicate rows; this column makes the constraint actually hold and gives
+  /// Prisma a non-nullable key to upsert on.
+  episodeKey  String    @default("")
+  positionSec Int       @default(0)
+  durationSec Int       @default(0)
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  profile Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title   Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, titleId, episodeKey])
+  @@index([profileId, updatedAt])
+}
+
+model WatchlistItem {
+  profileId String
+  titleId   String
+  createdAt DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title   Title   @relation(fields: [titleId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, titleId])
+  @@index([profileId, createdAt])
+}
+
+/// An admin-uploaded subtitle track, converted to WebVTT at upload time.
+/// Scoped to a movie when episodeId is null, to one episode otherwise —
+/// episodeKey mirrors episodeId the same way WatchProgress does, because
+/// Postgres treats NULLs as distinct and a unique index needs a non-nullable
+/// key to upsert on.
+model Subtitle {
+  id         String   @id @default(cuid())
+  titleId    String
+  episodeId  String?
+  episodeKey String   @default("")
+  /// ISO 639-1, e.g. "bn", "hi".
+  language   String
+  label      String
+  vttUrl     String
+  createdAt  DateTime @default(now())
+
+  title   Title    @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([titleId, episodeKey, language])
+  @@index([titleId, episodeKey])
+}
+
+/// One row per playback session start. Feeds the Trending rail.
+model PlayEvent {
+  id        String   @id @default(cuid())
+  profileId String
+  titleId   String?
+  episodeId String?
+  channelId String?
+  createdAt DateTime @default(now())
+
+  profile Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  title   Title?   @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  channel Channel? @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([titleId, createdAt])
+}
