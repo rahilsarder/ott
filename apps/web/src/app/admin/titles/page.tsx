@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BulkPublishResult } from '@ott/shared';
+import type { BulkPublishResult, Paginated } from '@ott/shared';
 import { api } from '@/lib/api';
 import { Banner, Button, Card, inputClass } from '@/components/admin/ui';
 import { cn } from '@/lib/format';
@@ -20,16 +20,23 @@ interface AdminTitleRow {
   _count: { episodes: number; seasons: number };
 }
 
+const PER_PAGE = 50;
+
 export default function TitlesAdmin() {
   const client = useQueryClient();
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [skipped, setSkipped] = useState<BulkPublishResult['skipped']>(undefined);
 
-  const { data: titles, isLoading } = useQuery({
-    queryKey: ['admin', 'titles', search],
-    queryFn: () => api<AdminTitleRow[]>(`/admin/titles${search ? `?q=${encodeURIComponent(search)}` : ''}`),
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin', 'titles', search, page],
+    queryFn: () =>
+      api<Paginated<AdminTitleRow>>(
+        `/admin/titles?perPage=${PER_PAGE}&page=${page}${search ? `&q=${encodeURIComponent(search)}` : ''}`,
+      ),
   });
+  const titles = data?.items;
 
   const invalidate = () => void client.invalidateQueries({ queryKey: ['admin', 'titles'] });
 
@@ -67,7 +74,10 @@ export default function TitlesAdmin() {
         <h1 className="text-2xl font-semibold tracking-[-0.015em]">Titles</h1>
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
           placeholder="Search titles"
           className={cn(inputClass, 'ml-auto w-full sm:w-64')}
         />
@@ -190,6 +200,26 @@ export default function TitlesAdmin() {
             </tbody>
           </table>
         </Card>
+      )}
+
+      {data && data.total > 0 && (
+        <div className="flex items-center justify-between text-sm text-ash">
+          <span>
+            {data.total.toLocaleString()} title{data.total === 1 ? '' : 's'} · page {data.page} of {data.totalPages}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="ghost" disabled={data.page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Previous
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={data.page >= data.totalPages}
+              onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
