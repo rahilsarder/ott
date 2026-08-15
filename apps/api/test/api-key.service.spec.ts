@@ -24,7 +24,20 @@ function makeService() {
         Object.assign(row, data);
         return row;
       }),
-      findMany: vi.fn(async () => [...rows.values()]),
+      // Honors `select` like real Prisma would, so a test asserting a field's
+      // absence actually exercises the service's select clause rather than
+      // always seeing the full row regardless of what the service asked for.
+      findMany: vi.fn(async (args: { select?: Record<string, boolean> } = {}) => {
+        const all = [...rows.values()];
+        if (!args.select) return all;
+        return all.map((row) => {
+          const picked: Record<string, unknown> = {};
+          for (const key of Object.keys(args.select!)) {
+            if (args.select![key]) picked[key] = (row as unknown as Record<string, unknown>)[key];
+          }
+          return picked;
+        });
+      }),
     },
   };
 
@@ -59,5 +72,16 @@ describe('ApiKeyService', () => {
     const a = await service.create('one');
     const b = await service.create('two');
     expect(a.key).not.toEqual(b.key);
+  });
+
+  it('list() never exposes keyHash', async () => {
+    const { service } = makeService();
+    await service.create('jarvis');
+
+    const rows = await service.list();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toHaveProperty('keyHash');
+    expect(rows[0]).toHaveProperty('label', 'jarvis');
   });
 });

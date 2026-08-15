@@ -19,6 +19,7 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
 import { z } from 'zod';
 import {
+  adminTitleListQuerySchema,
   apiKeyCreateSchema,
   bulkAttachStreamsSchema,
   bulkPublishSchema,
@@ -33,6 +34,7 @@ import {
   upsertSeasonSchema,
   upsertSubtitleMetaSchema,
   upsertTitleSchema,
+  type AdminTitleListQuery,
   type ApiKeyCreateInput,
   type AwaitingStreams,
   type BulkAttachStreamsInput,
@@ -106,8 +108,14 @@ export class AdminController {
   }
 
   @Get('titles')
-  listTitles(@Query('q') q?: string) {
-    return this.admin.listTitles(q);
+  listTitles(@Query(zodPipe(adminTitleListQuerySchema)) query: AdminTitleListQuery) {
+    return this.admin.listTitles(query);
+  }
+
+  // Must stay above 'titles/:id' — otherwise Nest matches "stats" as :id.
+  @Get('titles/stats')
+  titleStats() {
+    return this.admin.titleStats();
   }
 
   @Get('titles/:id')

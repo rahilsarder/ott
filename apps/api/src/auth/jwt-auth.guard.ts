@@ -18,17 +18,22 @@ export class JwtAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const roles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [context.getHandler(), context.getClass()]);
 
     const request = context.switchToHttp().getRequest<RequestWithUser>();
 
     const apiKeyHeader = request.headers['x-api-key'];
-    if (typeof apiKeyHeader === 'string') {
+    // Only honored on routes that declare @Roles(...) — API keys are v1-scoped
+    // to admin-equivalent access (see design spec's Auth model), so a route
+    // with no role requirement (e.g. device pairing, profile selection) never
+    // even looks at this header, regardless of whether it looks valid.
+    if (typeof apiKeyHeader === 'string' && roles?.length) {
       const verified = await this.apiKeys.verify(apiKeyHeader);
       if (!verified) throw new UnauthorizedException('Invalid or revoked API key');
       // Synthesized to match AccessTokenPayload — API keys are full-admin
       // scoped in v1, so existing @Roles('ADMIN') checks pass unchanged.
       request.user = { sub: `apikey:${verified.id}`, email: 'api-key', role: 'ADMIN', jti: verified.id };
-      return this.checkRoles(context, request.user.role);
+      return this.checkRoles(roles, request.user.role);
     }
 
     const token = extractBearer(request.headers.authorization);
@@ -46,11 +51,10 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or expired access token');
     }
 
-    return this.checkRoles(context, request.user.role);
+    return this.checkRoles(roles, request.user.role);
   }
 
-  private checkRoles(context: ExecutionContext, role: UserRole): boolean {
-    const roles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, [context.getHandler(), context.getClass()]);
+  private checkRoles(roles: UserRole[] | undefined, role: UserRole): boolean {
     if (roles?.length && !roles.includes(role)) {
       throw new ForbiddenException('Insufficient role');
     }

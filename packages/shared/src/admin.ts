@@ -1,5 +1,11 @@
 import { z } from 'zod';
 import { streamPathSchema } from './catalog';
+import { paginationQuerySchema } from './enums';
+
+export const adminTitleListQuerySchema = paginationQuerySchema.extend({
+  q: z.string().max(120).optional(),
+});
+export type AdminTitleListQuery = z.infer<typeof adminTitleListQuerySchema>;
 
 export const bulkPublishSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(500),
