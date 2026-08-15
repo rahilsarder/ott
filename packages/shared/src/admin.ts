@@ -48,3 +48,8 @@ export interface AwaitingStreams {
   movies: AwaitingMovie[];
   episodes: AwaitingEpisode[];
 }
+
+export const apiKeyCreateSchema = z.object({
+  label: z.string().min(1).max(100),
+});
+export type ApiKeyCreateInput = z.infer<typeof apiKeyCreateSchema>;
