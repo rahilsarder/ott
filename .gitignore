@@ -11,6 +11,7 @@ out/
 
 uploads/
 logs/
+ops/data/
 *.log
 npm-debug.log*
 .pnpm-debug.log*

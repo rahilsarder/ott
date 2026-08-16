@@ -1,9 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { normalizeSearch } from '@ott/shared';
 import type {
+  AdminTitleListQuery,
   AwaitingStreams,
   BulkAttachResult,
   BulkPublishResult,
+  Paginated,
   UpsertChannelInput,
   UpsertEpisodeInput,
   UpsertSeasonInput,
@@ -12,6 +15,10 @@ import type {
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { HOME_CACHE_PREFIX } from '../rails/rails.cache';
+
+type AdminTitleRow = Prisma.TitleGetPayload<{
+  include: { genres: { include: { genre: true } }; _count: { select: { episodes: true; seasons: true } } };
+}>;
 
 @Injectable()
 export class AdminService {
@@ -25,16 +32,41 @@ export class AdminService {
     await this.redis.invalidatePrefix(HOME_CACHE_PREFIX);
   }
 
-  async listTitles(q?: string) {
-    return this.prisma.title.findMany({
-      where: q ? { name: { contains: q, mode: 'insensitive' } } : undefined,
-      orderBy: { updatedAt: 'desc' },
-      include: {
-        genres: { include: { genre: true } },
-        _count: { select: { episodes: true, seasons: true } },
-      },
-      take: 200,
-    });
+  async listTitles(query: AdminTitleListQuery): Promise<Paginated<AdminTitleRow>> {
+    const where = query.q ? { name: { contains: query.q, mode: 'insensitive' as const } } : undefined;
+
+    const [items, total] = await Promise.all([
+      this.prisma.title.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          genres: { include: { genre: true } },
+          _count: { select: { episodes: true, seasons: true } },
+        },
+        skip: (query.page - 1) * query.perPage,
+        take: query.perPage,
+      }),
+      this.prisma.title.count({ where }),
+    ]);
+
+    return {
+      items,
+      page: query.page,
+      perPage: query.perPage,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.perPage)),
+    };
+  }
+
+  /** Catalog-wide counts for the dashboard — deliberately not derived from a page of listTitles(). */
+  async titleStats(): Promise<{ total: number; published: number; movies: number; series: number }> {
+    const [total, published, movies, series] = await Promise.all([
+      this.prisma.title.count(),
+      this.prisma.title.count({ where: { isPublished: true } }),
+      this.prisma.title.count({ where: { type: 'MOVIE' } }),
+      this.prisma.title.count({ where: { type: 'SERIES' } }),
+    ]);
+    return { total, published, movies, series };
   }
 
   async getTitle(id: string) {

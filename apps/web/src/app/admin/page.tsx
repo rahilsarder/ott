@@ -5,26 +5,30 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Card } from '@/components/admin/ui';
 
-interface AdminTitle {
-  id: string;
-  name: string;
-  isPublished: boolean;
-  type: string;
-}
 interface AdminChannel {
   id: string;
   name: string;
   isPublished: boolean;
 }
+interface AdminTitleStats {
+  total: number;
+  published: number;
+  movies: number;
+  series: number;
+}
 
 export default function AdminOverview() {
-  const { data: titles } = useQuery({ queryKey: ['admin', 'titles'], queryFn: () => api<AdminTitle[]>('/admin/titles') });
+  // Catalog-wide counts, not derived from a page of /admin/titles — that
+  // endpoint is paginated and would only ever reflect one page's worth.
+  const { data: stats } = useQuery({
+    queryKey: ['admin', 'titles', 'stats'],
+    queryFn: () => api<AdminTitleStats>('/admin/titles/stats'),
+  });
   const { data: channels } = useQuery({
     queryKey: ['admin', 'channels'],
     queryFn: () => api<AdminChannel[]>('/admin/channels'),
   });
 
-  const published = titles?.filter((t) => t.isPublished).length ?? 0;
   const liveChannels = channels?.filter((c) => c.isPublished).length ?? 0;
 
   return (
@@ -32,10 +36,10 @@ export default function AdminOverview() {
       <h1 className="text-2xl font-semibold tracking-[-0.015em]">Overview</h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Titles" value={titles?.length ?? 0} sub={`${published} published`} />
+        <Stat label="Titles" value={stats?.total ?? 0} sub={`${stats?.published ?? 0} published`} />
         <Stat label="Channels" value={channels?.length ?? 0} sub={`${liveChannels} live`} />
-        <Stat label="Series" value={titles?.filter((t) => t.type === 'SERIES').length ?? 0} sub="in catalog" />
-        <Stat label="Movies" value={titles?.filter((t) => t.type === 'MOVIE').length ?? 0} sub="in catalog" />
+        <Stat label="Series" value={stats?.series ?? 0} sub="in catalog" />
+        <Stat label="Movies" value={stats?.movies ?? 0} sub="in catalog" />
       </div>
 
       <Card className="space-y-3">

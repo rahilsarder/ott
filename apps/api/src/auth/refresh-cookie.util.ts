@@ -5,10 +5,14 @@ import type { Env } from '../config/env';
 export const REFRESH_COOKIE = 'ott_rt';
 
 function cookieOptions(config: ConfigService<Env, true>, maxAgeMs: number) {
-  const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
+  // Tied to the actual origin protocol, not NODE_ENV — a production deploy
+  // can still legitimately be served over plain HTTP (e.g. a private-IP box
+  // with no TLS in front of it), and `secure` cookies are silently dropped
+  // by the browser on such a connection, breaking refresh entirely.
+  const isSecureOrigin = config.get('WEB_ORIGIN', { infer: true }).startsWith('https://');
   return {
     httpOnly: true,
-    secure: isProd,
+    secure: isSecureOrigin,
     sameSite: 'lax' as const,
     path: '/',
     maxAge: maxAgeMs,

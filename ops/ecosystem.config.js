@@ -34,7 +34,11 @@ module.exports = {
     {
       name: 'ott-web',
       cwd: './apps/web',
-      script: 'node_modules/.bin/next',
+      // Not node_modules/.bin/next — under pnpm that's a POSIX shell shim, not
+      // JS, and PM2 tries to load it through Node's module loader regardless,
+      // which fails with a SyntaxError on the shell syntax before the app ever
+      // starts. The real JS entry point one level down works fine in cluster mode.
+      script: 'node_modules/next/dist/bin/next',
       args: 'start -p 3000',
       instances: 2,
       exec_mode: 'cluster',

@@ -25,6 +25,8 @@ sudo -u postgres psql -c "CREATE DATABASE ott OWNER ott;"
 sudo mkdir -p /srv/ott && sudo chown "$USER" /srv/ott
 git clone <your-repo> /srv/ott && cd /srv/ott
 cp .env.example .env   # then edit — see section 3
+ln -s ../../.env apps/api/.env   # pnpm --filter runs with cwd=apps/api, so it needs its own path to the root .env
+ln -s ../../.env apps/web/.env   # same reason — next build needs NEXT_PUBLIC_* here or it silently falls back to localhost defaults
 pnpm install --frozen-lockfile
 pnpm --filter @ott/api exec prisma generate
 pnpm --filter @ott/api exec prisma migrate deploy   # deploy step, never on boot
@@ -45,7 +47,8 @@ Every value is documented in `.env.example`. The ones that must change from the 
 | `FLUSSONIC_SECURELINK_KEY` | Must equal the "Securelink auth key" in Flussonic (section 4), including any `?no_check_ip=true` suffix. **Empty means live URLs go out unsigned and Flussonic rejects them.** |
 | `FLUSSONIC_AUTH_IP_ALLOWLIST` | Your Flussonic server's IP, so nothing else can call the auth callback. |
 | `WEB_ORIGIN`, `PUBLIC_ASSET_BASE_URL`, `COOKIE_DOMAIN` | Your real domain. |
-| `NODE_ENV=production` | Makes the refresh cookie `Secure`. |
+| `NODE_ENV=production` | Runs Nest/Next in production mode (optimized builds, no dev logging). |
+| `WEB_ORIGIN` | Also controls the refresh cookie's `Secure` flag — `https://` origins get a `Secure` cookie, `http://` origins don't (the browser would silently drop a `Secure` cookie over plain HTTP). |
 
 ## 4. Configure Flussonic
 

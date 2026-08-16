@@ -54,7 +54,9 @@ function LoginForm() {
       />
 
       <div className="relative w-full max-w-md animate-rise rounded-xl bg-black/75 p-8 shadow-2xl ring-1 ring-white/10 backdrop-blur">
-        <h1 className="mb-1 text-3xl font-black tracking-tighter text-accent">STREAMLY</h1>
+        <h1 className="mb-1 text-3xl font-black uppercase tracking-tighter text-accent">
+          {process.env.NEXT_PUBLIC_BRAND_NAME ?? 'Streamly'}
+        </h1>
         <p className="mb-6 text-sm text-white/60">
           {mode === 'signin' ? 'Sign in to keep watching.' : 'Create an account to start watching.'}
         </p>
