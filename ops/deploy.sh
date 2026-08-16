@@ -15,6 +15,13 @@
 #   ops/deploy.sh [ssh-target] --to-http         begin migrating an existing
 #                                                 https deploy to plain http
 #   ops/deploy.sh [ssh-target] --to-http-finish  finish that migration
+#   ops/deploy.sh [ssh-target] --non-interactive   first-time setup, reading
+#                                                   DEPLOY_PROTOCOL, DEPLOY_HOST_NAME,
+#                                                   DEPLOY_CERTBOT_EMAIL (if https),
+#                                                   DEPLOY_BRAND_NAME, DEPLOY_ADMIN_EMAIL,
+#                                                   DEPLOY_FLUSSONIC_BASE_URL,
+#                                                   DEPLOY_FLUSSONIC_SECURELINK_KEY from env
+#                                                   instead of prompting
 #
 # The --to-http pair exists because downgrading a domain that already sent
 # HSTS is not a one-shot flip: browsers that visited it over https have that
@@ -50,15 +57,21 @@ trap 'rm -rf "$SCRATCH"' EXIT
 INSTALL_DIR="/srv/ott"
 
 MODE="deploy"
+NON_INTERACTIVE=false
 TARGET=""
 for arg in "$@"; do
   case "$arg" in
     --to-http) MODE="to-http" ;;
     --to-http-finish) MODE="to-http-finish" ;;
+    --non-interactive) NON_INTERACTIVE=true ;;
     *) TARGET="$arg" ;;
   esac
 done
 if [[ -z "$TARGET" ]]; then
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    echo "Error: SSH target must be passed as an argument when using --non-interactive" >&2
+    exit 1
+  fi
   read -rp "SSH target (alias from ~/.ssh/config, or user@host): " TARGET
 fi
 
@@ -71,6 +84,24 @@ strip_scheme() {
   s="${s#https://}"
   s="${s#http://}"
   echo "$s"
+}
+
+# In non-interactive mode, reads $2 from the environment (erroring if unset
+# and $3 is "required"). Otherwise prompts with $1 and falls back to $2
+# already being pre-set as a default, matching the existing read -rp calls.
+resolve_value() {
+  local prompt="$1" env_var="$2" required="${3:-}"
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    local value="${!env_var:-}"
+    if [[ -z "$value" && "$required" == "required" ]]; then
+      echo "Error: $env_var must be set when using --non-interactive" >&2
+      exit 1
+    fi
+    echo "$value"
+  else
+    read -rp "$prompt" value
+    echo "$value"
+  fi
 }
 
 # Shared port-80 vhost — used for fresh http-mode installs, and as the
@@ -257,40 +288,56 @@ echo
 
 # --- prompts -----------------------------------------------------------------
 
-echo "Protocol — choose http if this box only has a private IP / no domain pointed at it:"
-select proto in "http  (private IP, no TLS)" "https (public domain, TLS via certbot)"; do
-  case $REPLY in
-    1) PROTOCOL=http; break ;;
-    2) PROTOCOL=https; break ;;
-    *) echo "Pick 1 or 2." ;;
-  esac
-done
-
-if [[ "$PROTOCOL" == https ]]; then
-  read -rp "Domain name (must already point at this box' public IP): " HOST_NAME
-  read -rp "Email for certbot renewal notices: " CERTBOT_EMAIL
+if [[ "$NON_INTERACTIVE" == true ]]; then
+  PROTOCOL="$(resolve_value "" DEPLOY_PROTOCOL required)"
+  HOST_NAME="$(resolve_value "" DEPLOY_HOST_NAME required)"
+  [[ "$PROTOCOL" == https ]] && CERTBOT_EMAIL="$(resolve_value "" DEPLOY_CERTBOT_EMAIL required)"
+  BRAND_NAME="$(resolve_value "" DEPLOY_BRAND_NAME)"
+  BRAND_NAME="${BRAND_NAME:-Streamly}"
+  SEED_ADMIN_EMAIL="$(resolve_value "" DEPLOY_ADMIN_EMAIL)"
+  SEED_ADMIN_EMAIL="${SEED_ADMIN_EMAIL:-admin@ott.local}"
+  FLUSSONIC_BASE_URL="$(resolve_value "" DEPLOY_FLUSSONIC_BASE_URL required)"
+  FLUSSONIC_SECURELINK_KEY="$(resolve_value "" DEPLOY_FLUSSONIC_SECURELINK_KEY)"
 else
-  read -rp "IP address or hostname of this box: " HOST_NAME
+  echo "Protocol — choose http if this box only has a private IP / no domain pointed at it:"
+  select proto in "http  (private IP, no TLS)" "https (public domain, TLS via certbot)"; do
+    case $REPLY in
+      1) PROTOCOL=http; break ;;
+      2) PROTOCOL=https; break ;;
+      *) echo "Pick 1 or 2." ;;
+    esac
+  done
+
+  if [[ "$PROTOCOL" == https ]]; then
+    read -rp "Domain name (must already point at this box' public IP): " HOST_NAME
+    read -rp "Email for certbot renewal notices: " CERTBOT_EMAIL
+  else
+    read -rp "IP address or hostname of this box: " HOST_NAME
+  fi
+
+  read -rp "Brand name (site title / login screen wordmark) [Streamly]: " BRAND_NAME
+  BRAND_NAME="${BRAND_NAME:-Streamly}"
+
+  read -rp "Admin login email [admin@ott.local]: " SEED_ADMIN_EMAIL
+  SEED_ADMIN_EMAIL="${SEED_ADMIN_EMAIL:-admin@ott.local}"
+
+  read -rp "Flussonic base URL (e.g. http://cdn.example.com:8082): " FLUSSONIC_BASE_URL
+  while [[ -z "$FLUSSONIC_BASE_URL" ]]; do
+    read -rp "  required — Flussonic base URL: " FLUSSONIC_BASE_URL
+  done
+
+  read -rp "Flussonic securelink key (blank = unsigned, no auth): " FLUSSONIC_SECURELINK_KEY
 fi
-
-read -rp "Brand name (site title / login screen wordmark) [Streamly]: " BRAND_NAME
-BRAND_NAME="${BRAND_NAME:-Streamly}"
-
-read -rp "Admin login email [admin@ott.local]: " SEED_ADMIN_EMAIL
-SEED_ADMIN_EMAIL="${SEED_ADMIN_EMAIL:-admin@ott.local}"
-
-read -rp "Flussonic base URL (e.g. http://cdn.example.com:8082): " FLUSSONIC_BASE_URL
-while [[ -z "$FLUSSONIC_BASE_URL" ]]; do
-  read -rp "  required — Flussonic base URL: " FLUSSONIC_BASE_URL
-done
-
-read -rp "Flussonic securelink key (blank = unsigned, no auth): " FLUSSONIC_SECURELINK_KEY
 
 CATALOG_DUMP="ops/data/catalog-seed.dump"
 LOAD_CATALOG=false
 if [[ -f "$CATALOG_DUMP" ]]; then
-  read -rp "Load the migrated catalog dump (15k+ titles) instead of demo seed data? [Y/n]: " ans
-  [[ "${ans:-Y}" =~ ^[Yy] ]] && LOAD_CATALOG=true
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    LOAD_CATALOG=true
+  else
+    read -rp "Load the migrated catalog dump (15k+ titles) instead of demo seed data? [Y/n]: " ans
+    [[ "${ans:-Y}" =~ ^[Yy] ]] && LOAD_CATALOG=true
+  fi
 fi
 
 # --- generate secrets ---------------------------------------------------------

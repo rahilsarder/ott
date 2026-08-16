@@ -20,6 +20,7 @@ import type { Request } from 'express';
 import { z } from 'zod';
 import {
   adminTitleListQuerySchema,
+  apiKeyCreateSchema,
   bulkAttachStreamsSchema,
   bulkPublishSchema,
   bulkSubtitleMetaSchema,
@@ -34,6 +35,7 @@ import {
   upsertSubtitleMetaSchema,
   upsertTitleSchema,
   type AdminTitleListQuery,
+  type ApiKeyCreateInput,
   type AwaitingStreams,
   type BulkAttachStreamsInput,
   type BulkPublishInput,
@@ -230,6 +232,22 @@ export class AdminController {
   @Post('genres')
   createGenre(@Body(zodPipe(genreSchema)) body: z.infer<typeof genreSchema>) {
     return this.admin.createGenre(body.name, body.slug);
+  }
+
+  @Post('api-keys')
+  createApiKey(@Body(zodPipe(apiKeyCreateSchema)) body: ApiKeyCreateInput) {
+    return this.admin.createApiKey(body.label);
+  }
+
+  @Get('api-keys')
+  listApiKeys() {
+    return this.admin.listApiKeys();
+  }
+
+  @HttpCode(204)
+  @Delete('api-keys/:id')
+  revokeApiKey(@Param('id') id: string) {
+    return this.admin.revokeApiKey(id);
   }
 
   @Get('users')

@@ -67,6 +67,15 @@ model RefreshToken {
   @@index([expiresAt])
 }
 
+model ApiKey {
+  id         String    @id @default(cuid())
+  label      String
+  keyHash    String    @unique
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+}
+
 enum DeviceAuthStatus {
   PENDING
   APPROVED

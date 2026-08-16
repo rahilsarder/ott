@@ -12,6 +12,7 @@ import type {
   UpsertSeasonInput,
   UpsertTitleInput,
 } from '@ott/shared';
+import { ApiKeyService } from '../auth/api-key.service';
 import { PrismaService } from '../common/prisma.service';
 import { RedisService } from '../common/redis.service';
 import { HOME_CACHE_PREFIX } from '../rails/rails.cache';
@@ -25,6 +26,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly apiKeys: ApiKeyService,
   ) {}
 
   /** Any catalog write invalidates every profile's cached home page. */
@@ -357,6 +359,18 @@ export class AdminService {
         name: e.name,
       })),
     };
+  }
+
+  createApiKey(label: string) {
+    return this.apiKeys.create(label);
+  }
+
+  listApiKeys() {
+    return this.apiKeys.list();
+  }
+
+  async revokeApiKey(id: string): Promise<void> {
+    await this.apiKeys.revoke(id);
   }
 
   private async assertSlugFree(slug: string): Promise<void> {
