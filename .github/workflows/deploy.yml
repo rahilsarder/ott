@@ -1,0 +1,61 @@
+name: Deploy
+
+# Runs on the self-hosted runner installed on the VM itself (see ops/deploy.md
+# for the runner setup steps) — the runner polls GitHub over an outbound
+# connection, so nothing on the VM needs to be reachable from the internet.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    # Mirrors the exact steps in ops/deploy.md's "Deploying an update" section —
+    # if a deploy ever needs to be run by hand, those are the same commands.
+    steps:
+      - name: Sync to latest main
+        run: |
+          cd /srv/ott
+          git fetch origin
+          git reset --hard origin/main
+
+      - name: Install dependencies
+        run: |
+          cd /srv/ott
+          pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: |
+          cd /srv/ott
+          pnpm --filter @ott/api exec vitest run
+
+      - name: Apply database migrations
+        run: |
+          cd /srv/ott
+          pnpm --filter @ott/api exec prisma generate
+          pnpm --filter @ott/api exec prisma migrate deploy
+
+      - name: Build
+        run: |
+          cd /srv/ott
+          pnpm build
+
+      - name: Reload
+        run: pm2 reload all
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS http://localhost:4000/healthz >/dev/null; then
+              echo "API healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become healthy after reload" >&2
+          exit 1

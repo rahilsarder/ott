@@ -1,0 +1,105 @@
+#!/bin/sh
+##
+# Flussonic 21.10 Uninstaller
+
+# Removing Flussonic
+cp -i /etc/flussonic/flussonic.conf flussonic.conf.bak
+service flussonic stop
+apt remove -y flussonic
+apt remove -y flussonic-erlang
+apt remove -y flussonic-python
+apt remove -y flussonic-transcoder
+apt remove -y flussonic-transcoder-base
+rm -rf /opt/flussonic /etc/flussonic /var/log/flussonic /var/lib/flussonic
+
+# Hosts to remove
+hosts="/etc/hosts"
+localhost="127.0.0.1"
+
+sed -i -e "/\
+# Flussonic Crack/d" $hosts
+
+sed -i -e "/$localhost a-yurchenko.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost admin.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost almatel.flussonic.com/d" $hosts
+sed -i -e "/$localhost amsterdam.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost amsterdam.flussonic.com/d" $hosts
+sed -i -e "/$localhost apt.flussonic.com/d" $hosts
+sed -i -e "/$localhost arm2.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost chat.flussonic.com/d" $hosts
+sed -i -e "/$localhost coder-pinghome.flussonic.com/d" $hosts
+sed -i -e "/$localhost dc-f4bdeaf7a9a7.flussonic111.com/d" $hosts
+sed -i -e "/$localhost debian.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost demo-ca.flussonic.com/d" $hosts
+sed -i -e "/$localhost demo-cdn.flussonic.com/d" $hosts
+sed -i -e "/$localhost demo-watcher-s1.flussonic.com/d" $hosts
+sed -i -e "/$localhost demo-watcher-s2.flussonic.com/d" $hosts
+sed -i -e "/$localhost demo-watcher-s3.flussonic.com/d" $hosts
+sed -i -e "/$localhost demo-watcher-s4.flussonic.com/d" $hosts
+sed -i -e "/$localhost demo-watcher.flussonic.com/d" $hosts
+sed -i -e "/$localhost demo.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost demo.flussonic.com/d" $hosts
+sed -i -e "/$localhost dev.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost docs.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost docs.flussonic.com/d" $hosts
+sed -i -e "/$localhost email.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost erlyvideo.org/d" $hosts
+sed -i -e "/$localhost flussonic.cloud/d" $hosts
+sed -i -e "/$localhost flussonic.com/d" $hosts
+sed -i -e "/$localhost flussonic111.com/d" $hosts
+sed -i -e "/$localhost forum.flussonic.com/d" $hosts
+sed -i -e "/$localhost frankfurt.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost gate.flussonic111.com/d" $hosts
+sed -i -e "/$localhost installation-demo.flussonic.com/d" $hosts
+sed -i -e "/$localhost l6-presence.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost l6-presence.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost license.flussonic.com/d" $hosts
+sed -i -e "/$localhost license4-1.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost license4-2.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost license4-3.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost license4-4.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost license4.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost license4.flussonic.com/d" $hosts
+sed -i -e "/$localhost log-uploader.flussonic.com/d" $hosts
+sed -i -e "/$localhost mail.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost manage.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost manage.flussonic.com/d" $hosts
+sed -i -e "/$localhost maskingbox.flussonic.com/d" $hosts
+sed -i -e "/$localhost moscow.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost my.flussonic.com/d" $hosts
+sed -i -e "/$localhost my.retroview.local/d" $hosts
+sed -i -e "/$localhost new-york.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost o1.ptr8147.email.flussonic.com/d" $hosts
+sed -i -e "/$localhost origin11.flussonic111.com/d" $hosts
+sed -i -e "/$localhost origin12.flussonic111.com/d" $hosts
+sed -i -e "/$localhost retroview.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost retroview.flussonic.com/d" $hosts
+sed -i -e "/$localhost retroview.flussonic111.com/d" $hosts
+sed -i -e "/$localhost rv-ams.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost rv-collect.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost rv-s2.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost rv-s3.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost rv-zk1.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost rv-zk2.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost rv-zk3.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost seattle.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost sentry.flussonic.com/d" $hosts
+sed -i -e "/$localhost singapore.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost ssh.flussonic.com/d" $hosts
+sed -i -e "/$localhost support.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost sydney.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost ua2.flussonic111.com/d" $hosts
+sed -i -e "/$localhost url8884.flussonic.com/d" $hosts
+sed -i -e "/$localhost watcher.flussonic.com/d" $hosts
+sed -i -e "/$localhost webrtc-s1.flussonic.com/d" $hosts
+sed -i -e "/$localhost webrtc.flussonic.com/d" $hosts
+sed -i -e "/$localhost www.erlyvideo.org/d" $hosts
+sed -i -e "/$localhost www.flussonic.cloud/d" $hosts
+sed -i -e "/$localhost www.flussonic.com/d" $hosts
+sed -i -e "/$localhost www.flussonic111.com/d" $hosts
+sed -i -e "/$localhost www.maskingbox.flussonic.com/d" $hosts
+sed -i -e "/$localhost www.watcher.flussonic.com/d" $hosts
+sed -i -e "/$localhost wz.flussonic111.com/d" $hosts
+
+# Done
+echo 'Done'
