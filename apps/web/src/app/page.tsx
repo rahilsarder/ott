@@ -5,28 +5,24 @@ import type { Channel, HomeResponse } from '@ott/shared';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useWatchlist } from '@/lib/use-watchlist';
-import { AuthGate } from '@/components/AuthGate';
 import { FeatureFrame, FeatureFrameSkeleton } from '@/projection/FeatureFrame';
 import { RailRow, RailRowSkeleton } from '@/projection/RailRow';
 import { OnAirStrip, TabBar, TopNav } from '@/projection/shell';
 
 export default function HomePage() {
-  return (
-    <AuthGate>
-      <Home />
-    </AuthGate>
-  );
+  return <Home />;
 }
 
 function Home() {
-  const { profile, user } = useSession();
+  const { profile } = useSession();
   const client = useQueryClient();
 
+  // Both /home and /channels are public — no login needed to browse or
+  // watch. profile is only in the key so switching profiles (still possible
+  // for a logged-in admin) never shows the previous one's rows.
   const { data, isLoading, error } = useQuery({
-    // Keyed by profile so switching never shows the previous one's rows.
     queryKey: ['home', profile?.id],
     queryFn: () => api<HomeResponse>('/home'),
-    enabled: Boolean(profile),
   });
 
   // The on-air strip is its own query: it changes on the hour, while the rest
@@ -37,7 +33,6 @@ function Home() {
       const groups = await api<{ category: string; channels: Channel[] }[]>('/channels');
       return groups.flatMap((g) => g.channels);
     },
-    enabled: Boolean(profile),
     staleTime: 60_000,
   });
 

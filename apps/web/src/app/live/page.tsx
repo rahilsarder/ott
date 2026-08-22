@@ -7,7 +7,6 @@ import type { ChannelGroup, Guide } from '@ott/shared';
 import { api } from '@/lib/api';
 import { formatTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { AuthGate } from '@/components/AuthGate';
 import { TvIcon } from '@/components/icons';
 import { LiveCard } from '@/projection/cards';
 import { TabBar, TopNav } from '@/projection/shell';
@@ -19,11 +18,7 @@ const PIXELS_PER_MINUTE = 6;
 const CHANNEL_COL_WIDTH = 160;
 
 export default function LivePage() {
-  return (
-    <AuthGate>
-      <LiveView />
-    </AuthGate>
-  );
+  return <LiveView />;
 }
 
 function LiveView() {

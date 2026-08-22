@@ -9,7 +9,6 @@ import type { Channel, TitleCard as TitleCardModel } from '@ott/shared';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { formatRating } from '@/lib/format';
-import { AuthGate } from '@/components/AuthGate';
 import { PosterCard } from '@/projection/cards';
 import { TabBar, TopNav } from '@/projection/shell';
 import { LiveDot, LocalTime } from '@/projection/ui';
@@ -22,11 +21,9 @@ interface SearchResults {
 
 export default function SearchPage() {
   return (
-    <AuthGate>
-      <Suspense fallback={null}>
-        <Search />
-      </Suspense>
-    </AuthGate>
+    <Suspense fallback={null}>
+      <Search />
+    </Suspense>
   );
 }
 

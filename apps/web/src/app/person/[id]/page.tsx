@@ -6,17 +6,12 @@ import { useQuery } from '@tanstack/react-query';
 import type { PersonDetail } from '@ott/shared';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import { AuthGate } from '@/components/AuthGate';
 import { PosterCard } from '@/projection/cards';
 import { TabBar, TopNav } from '@/projection/shell';
 
 export default function PersonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  return (
-    <AuthGate>
-      <PersonView id={id} />
-    </AuthGate>
-  );
+  return <PersonView id={id} />;
 }
 
 function PersonView({ id }: { id: string }) {

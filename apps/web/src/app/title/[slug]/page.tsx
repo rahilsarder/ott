@@ -10,7 +10,6 @@ import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useWatchlist } from '@/lib/use-watchlist';
 import { cn, formatDuration, formatRating } from '@/lib/format';
-import { AuthGate } from '@/components/AuthGate';
 import { PersonCard, PosterCard } from '@/projection/cards';
 import { EpisodeRow, SeasonPicker } from '@/projection/episodes';
 import { TabBar, TopNav } from '@/projection/shell';
@@ -19,11 +18,7 @@ import { Button, SectionHead } from '@/projection/ui';
 
 export default function TitlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  return (
-    <AuthGate>
-      <TitleView slug={slug} />
-    </AuthGate>
-  );
+  return <TitleView slug={slug} />;
 }
 
 function TitleView({ slug }: { slug: string }) {

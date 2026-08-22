@@ -5,21 +5,19 @@ import { useRouter } from 'next/navigation';
 import type { PlaybackSession } from '@ott/shared';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import { AuthGate } from '@/components/AuthGate';
 import { VideoPlayer } from '@/components/player/VideoPlayer';
 
 export default function WatchPage({ params }: { params: Promise<{ kind: string; id: string }> }) {
   const { kind, id } = use(params);
-  return (
-    <AuthGate>
-      <WatchView kind={kind} id={id} />
-    </AuthGate>
-  );
+  return <WatchView kind={kind} id={id} />;
 }
 
 function WatchView({ kind, id }: { kind: string; id: string }) {
   const router = useRouter();
-  const { profile } = useSession();
+  // Playback works with no session at all — this only waits for `ready` so
+  // a logged-in viewer's token is actually attached before minting, rather
+  // than racing and getting treated as anonymous on the very first render.
+  const { ready } = useSession();
   const [session, setSession] = useState<PlaybackSession | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +27,7 @@ function WatchView({ kind, id }: { kind: string; id: string }) {
    * re-minting from then on, so caching or refetching it would be wrong.
    */
   useEffect(() => {
-    if (!profile) return;
+    if (!ready) return;
     let cancelled = false;
 
     void (async () => {
@@ -45,7 +43,7 @@ function WatchView({ kind, id }: { kind: string; id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [kind, id, profile]);
+  }, [kind, id, ready]);
 
   if (error) {
     return (

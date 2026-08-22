@@ -1,7 +1,6 @@
 'use client';
 
 import { Suspense } from 'react';
-import { AuthGate } from '@/components/AuthGate';
 import { BrowseView } from '@/projection/BrowseView';
 
 /**
@@ -12,10 +11,8 @@ import { BrowseView } from '@/projection/BrowseView';
  */
 export default function BrowsePage() {
   return (
-    <AuthGate>
-      <Suspense fallback={null}>
-        <BrowseView title="titles" basePath="/browse" />
-      </Suspense>
-    </AuthGate>
+    <Suspense fallback={null}>
+      <BrowseView title="titles" basePath="/browse" />
+    </Suspense>
   );
 }

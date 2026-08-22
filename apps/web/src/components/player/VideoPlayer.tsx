@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { PlaybackSession } from '@ott/shared';
 import { api } from '@/lib/api';
 import { cn, formatClock } from '@/lib/format';
+import { useSession } from '@/lib/session';
 import { useHlsPlayer } from '@/lib/use-hls-player';
 import { useSubtitleTracks } from '@/lib/use-subtitle-tracks';
 import { PlayerControls } from './PlayerControls';
@@ -16,6 +17,7 @@ const SEEK_STEP_SEC = 10;
 
 export function VideoPlayer({ session: initial }: { session: PlaybackSession }) {
   const router = useRouter();
+  const { profile } = useSession();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,8 +118,10 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
   }, [session.nextEpisodeId]);
 
   // Progress heartbeat. Live has no meaningful resume position, so it is skipped.
+  // Anonymous viewers have no profile to scope progress to — the API would just
+  // 401 every interval, so skip starting the loop at all rather than fail silently.
   useEffect(() => {
-    if (session.isLive || session.kind === 'channel') return;
+    if (session.isLive || session.kind === 'channel' || !profile) return;
 
     /**
      * `keepalive` lets the request outlive the page, which sendBeacon would also
@@ -157,7 +161,7 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
       window.removeEventListener('pagehide', onPageHide);
       report(true);
     };
-  }, [session.kind, session.id, session.isLive]);
+  }, [session.kind, session.id, session.isLive, profile]);
 
   const nudgeControls = useCallback(() => {
     setControlsVisible(true);

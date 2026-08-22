@@ -78,29 +78,38 @@ export function TopNav() {
           ))}
         </ul>
 
-        <div className="relative ml-auto">
-          <button
-            onClick={() => setMenuOpen((open) => !open)}
-            aria-label="Account menu"
-            aria-expanded={menuOpen}
-            aria-haspopup="menu"
-            className="focus-brass grid size-7 place-items-center overflow-hidden rounded-full bg-linear-to-br from-brass to-[#6e4e15] text-[0.6875rem] font-semibold text-night"
-          >
-            {avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- a small fixed-size external avatar, not worth next/image's optimization pipeline
-              <img
-                src={avatarUrl}
-                alt=""
-                referrerPolicy="no-referrer"
-                className="size-full object-cover"
-                onError={() => setAvatarFailed(true)}
-              />
-            ) : (
-              profileInitial
-            )}
-          </button>
-          {menuOpen && <AccountMenu onClose={() => setMenuOpen(false)} />}
-        </div>
+        {/*
+         * No account concept for viewers anymore — watching needs no login,
+         * so there is nothing this menu would offer an anonymous visitor
+         * (its one live entry, Saved, itself requires an account). Only
+         * render it once a session actually exists, e.g. an admin who signed
+         * in directly at /login.
+         */}
+        {user && (
+          <div className="relative ml-auto">
+            <button
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="Account menu"
+              aria-expanded={menuOpen}
+              aria-haspopup="menu"
+              className="focus-brass grid size-7 place-items-center overflow-hidden rounded-full bg-linear-to-br from-brass to-[#6e4e15] text-[0.6875rem] font-semibold text-night"
+            >
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- a small fixed-size external avatar, not worth next/image's optimization pipeline
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className="size-full object-cover"
+                  onError={() => setAvatarFailed(true)}
+                />
+              ) : (
+                profileInitial
+              )}
+            </button>
+            {menuOpen && <AccountMenu onClose={() => setMenuOpen(false)} />}
+          </div>
+        )}
       </nav>
     </header>
   );

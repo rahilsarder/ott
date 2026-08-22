@@ -15,7 +15,7 @@ export class PlaybackService {
   async createSession(
     kind: PlayableKind,
     id: string,
-    profileId: string,
+    profileId: string | null,
     clientIp: string,
   ): Promise<PlaybackSession> {
     switch (kind) {
@@ -28,19 +28,21 @@ export class PlaybackService {
     }
   }
 
-  private async movieSession(id: string, profileId: string, clientIp: string): Promise<PlaybackSession> {
+  private async movieSession(id: string, profileId: string | null, clientIp: string): Promise<PlaybackSession> {
     const title = await this.prisma.title.findUnique({ where: { id } });
     if (!title) throw new NotFoundException('Title not found');
     if (!title.isPublished) throw new ForbiddenException('Title is not available');
     if (!title.streamPath) throw new NotFoundException('This title has no stream configured');
 
     const signed = this.flussonic.signManifest(title.streamPath, clientIp, false);
-    const progress = await this.prisma.watchProgress.findFirst({
-      where: { profileId, titleId: title.id, episodeId: null },
-    });
+    // Resume position and play-event tracking are both profile-scoped (PlayEvent.profileId
+    // is a required FK) — an anonymous viewer always starts from 0 and generates no event.
+    const progress = profileId
+      ? await this.prisma.watchProgress.findFirst({ where: { profileId, titleId: title.id, episodeId: null } })
+      : null;
     const subtitles = await this.subtitles.forSession(title.id, null);
 
-    await this.recordPlay({ profileId, titleId: title.id });
+    if (profileId) await this.recordPlay({ profileId, titleId: title.id });
 
     return {
       kind: 'movie',
@@ -58,7 +60,7 @@ export class PlaybackService {
     };
   }
 
-  private async episodeSession(id: string, profileId: string, clientIp: string): Promise<PlaybackSession> {
+  private async episodeSession(id: string, profileId: string | null, clientIp: string): Promise<PlaybackSession> {
     const episode = await this.prisma.episode.findUnique({
       where: { id },
       include: { title: true, season: true },
@@ -69,12 +71,14 @@ export class PlaybackService {
     if (!episode.streamPath) throw new NotFoundException('This episode has no stream configured yet');
 
     const signed = this.flussonic.signManifest(episode.streamPath, clientIp, false);
-    const progress = await this.prisma.watchProgress.findFirst({
-      where: { profileId, titleId: episode.titleId, episodeId: episode.id },
-    });
+    const progress = profileId
+      ? await this.prisma.watchProgress.findFirst({
+          where: { profileId, titleId: episode.titleId, episodeId: episode.id },
+        })
+      : null;
     const subtitles = await this.subtitles.forSession(episode.titleId, episode.id);
 
-    await this.recordPlay({ profileId, titleId: episode.titleId, episodeId: episode.id });
+    if (profileId) await this.recordPlay({ profileId, titleId: episode.titleId, episodeId: episode.id });
 
     return {
       kind: 'episode',
@@ -92,7 +96,7 @@ export class PlaybackService {
     };
   }
 
-  private async channelSession(id: string, profileId: string, clientIp: string): Promise<PlaybackSession> {
+  private async channelSession(id: string, profileId: string | null, clientIp: string): Promise<PlaybackSession> {
     const channel = await this.prisma.channel.findFirst({
       where: { OR: [{ id }, { slug: id }] },
     });
@@ -105,7 +109,7 @@ export class PlaybackService {
       where: { channelId: channel.id, startsAt: { lte: now }, endsAt: { gt: now } },
     });
 
-    await this.recordPlay({ profileId, channelId: channel.id });
+    if (profileId) await this.recordPlay({ profileId, channelId: channel.id });
 
     return {
       kind: 'channel',

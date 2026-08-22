@@ -1,7 +1,7 @@
 import { Controller, ForbiddenException, Get, HttpCode, Param, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { PlayableKind, type PlaybackSession } from '@ott/shared';
-import { CurrentProfileId, Public } from '../auth/auth.decorators';
+import { OptionalProfileId, Public } from '../auth/auth.decorators';
 import { FlussonicService } from './flussonic.service';
 import { PlaybackService } from './playback.service';
 
@@ -12,12 +12,13 @@ export class PlaybackController {
     private readonly flussonic: FlussonicService,
   ) {}
 
+  @Public()
   @HttpCode(200)
   @Post(':kind/:id')
   async create(
     @Param('kind') kind: string,
     @Param('id') id: string,
-    @CurrentProfileId() profileId: string,
+    @OptionalProfileId() profileId: string | null,
     @Req() req: Request,
   ): Promise<PlaybackSession> {
     const parsedKind = PlayableKind.parse(kind);
