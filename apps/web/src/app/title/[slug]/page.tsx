@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import type { Paginated, TitleCard as TitleCardModel, TitleDetail } from '@ott/shared';
@@ -13,8 +13,12 @@ import { cn, formatDuration, formatRating } from '@/lib/format';
 import { PersonCard, PosterCard } from '@/projection/cards';
 import { EpisodeRow, SeasonPicker } from '@/projection/episodes';
 import { TabBar, TopNav } from '@/projection/shell';
-import { TrailerModal } from '@/projection/TrailerModal';
 import { Button, SectionHead } from '@/projection/ui';
+
+/** Dwell before the hero trailer autoplays — long enough that a viewer just
+ *  passing through isn't immediately hit with video+audio, short enough that
+ *  someone reading the synopsis still sees it kick in. */
+const HERO_TRAILER_DWELL_MS = 3000;
 
 export default function TitlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -118,7 +122,28 @@ function TitleView({ slug }: { slug: string }) {
 
 function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null }) {
   const { inList, toggle, pending } = useWatchlist(title.id);
-  const [showTrailer, setShowTrailer] = useState(false);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [dwellPassed, setDwellPassed] = useState(false);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    if (!title.trailerYoutubeId) return;
+    const timer = setTimeout(() => setDwellPassed(true), HERO_TRAILER_DWELL_MS);
+    return () => clearTimeout(timer);
+  }, [title.trailerYoutubeId]);
+
+  useEffect(() => {
+    if (!title.trailerYoutubeId) return;
+    const node = frameRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), { threshold: 0.4 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [title.trailerYoutubeId]);
+
+  // Re-entering view after the dwell has already passed resumes immediately —
+  // the delay is a first-load courtesy, not something to repeat every scroll.
+  const showTrailer = Boolean(title.trailerYoutubeId) && dwellPassed && inView;
 
   const facts = [
     formatRating(title.rating),
@@ -131,7 +156,20 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
 
   return (
     <section className="relative px-4 pt-6 md:px-12 md:pt-8">
-      <div className="chamfer-lg grain-over relative aspect-[3/4] overflow-hidden bg-night-3 shadow-[0_0_90px_rgb(200_150_62/0.10)] sm:aspect-[16/9] md:aspect-[21/9]">
+      <div
+        ref={frameRef}
+        className="chamfer-lg grain-over relative aspect-[3/4] overflow-hidden bg-night-3 shadow-[0_0_90px_rgb(200_150_62/0.10)] sm:aspect-[16/9] md:aspect-[21/9]"
+      >
+        {showTrailer && (
+          // Rendered only while dwelled-past and in view, so scrolling away
+          // actually stops playback (and audio) rather than just hiding it.
+          <iframe
+            className="absolute inset-0 h-full w-full"
+            src={`https://www.youtube-nocookie.com/embed/${title.trailerYoutubeId}?autoplay=1&mute=1&loop=1&playlist=${title.trailerYoutubeId}&controls=0&rel=0&modestbranding=1`}
+            title="Trailer"
+            allow="autoplay; encrypted-media"
+          />
+        )}
         {(title.posterUrl ?? title.backdropUrl) && (
           <Image
             src={(title.posterUrl ?? title.backdropUrl)!}
@@ -139,11 +177,21 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
             fill
             priority
             sizes="100vw"
-            className="object-cover sm:hidden"
+            className={cn('object-cover sm:hidden', showTrailer && 'opacity-0 transition-opacity duration-700')}
           />
         )}
         {title.backdropUrl && (
-          <Image src={title.backdropUrl} alt="" fill priority sizes="100vw" className="hidden object-cover sm:block" />
+          <Image
+            src={title.backdropUrl}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className={cn(
+              'hidden object-cover sm:block',
+              showTrailer && 'opacity-0 transition-opacity duration-700',
+            )}
+          />
         )}
         <span
           className="absolute inset-0"
@@ -193,17 +241,8 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
           <Button variant="quiet" onClick={() => void toggle()} disabled={pending} aria-pressed={inList}>
             {inList ? '✓ Saved' : '＋ Save'}
           </Button>
-          {title.trailerYoutubeId && (
-            <Button variant="ghost" onClick={() => setShowTrailer(true)}>
-              ▶ Trailer
-            </Button>
-          )}
         </div>
       </div>
-
-      {showTrailer && title.trailerYoutubeId && (
-        <TrailerModal youtubeId={title.trailerYoutubeId} onClose={() => setShowTrailer(false)} />
-      )}
     </section>
   );
 }
