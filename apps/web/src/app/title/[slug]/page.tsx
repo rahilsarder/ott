@@ -163,11 +163,24 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
         {showTrailer && (
           // Rendered only while dwelled-past and in view, so scrolling away
           // actually stops playback (and audio) rather than just hiding it.
+          //
+          // controls=0 only hides the bottom control bar — YouTube's own
+          // hover-triggered title/channel bar and its startup info flash
+          // aren't suppressible via URL params. pointer-events-none is what
+          // actually kills the hover chrome: the viewer's cursor never
+          // reaches the iframe's own document, so YouTube's hover listener
+          // never fires in the first place. Oversizing the iframe within
+          // the frame's overflow-hidden crops the edge-anchored title flash
+          // out of view. The small corner watermark logo can't be removed
+          // this way — that's a hard YouTube platform limit, not something
+          // fixable client-side; self-hosting the trailer file is the only
+          // way around it if that becomes a problem.
           <iframe
-            className="absolute inset-0 h-full w-full"
-            src={`https://www.youtube-nocookie.com/embed/${title.trailerYoutubeId}?autoplay=1&mute=1&loop=1&playlist=${title.trailerYoutubeId}&controls=0&rel=0&modestbranding=1`}
+            className="pointer-events-none absolute top-1/2 left-1/2 h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2"
+            src={`https://www.youtube-nocookie.com/embed/${title.trailerYoutubeId}?autoplay=1&mute=1&loop=1&playlist=${title.trailerYoutubeId}&controls=0&rel=0&modestbranding=1&disablekb=1&iv_load_policy=3&playsinline=1`}
             title="Trailer"
             allow="autoplay; encrypted-media"
+            tabIndex={-1}
           />
         )}
         {(title.posterUrl ?? title.backdropUrl) && (
