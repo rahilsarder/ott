@@ -127,6 +127,7 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
   const playerHostRef = useRef<HTMLDivElement>(null);
   const [dwellPassed, setDwellPassed] = useState(false);
   const [inView, setInView] = useState(false);
+  const [trailerPlaying, setTrailerPlaying] = useState(false);
 
   useEffect(() => {
     if (!title.trailerYoutubeId) return;
@@ -167,6 +168,7 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
     if (!showTrailer || !trailerYoutubeId || !playerHostRef.current) return;
     let cancelled = false;
     let player: YoutubePlayer | null = null;
+    let revealTimer: ReturnType<typeof setTimeout> | undefined;
     const host = playerHostRef.current;
     const mountPoint = document.createElement('div');
     host.appendChild(mountPoint);
@@ -199,6 +201,16 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
               'pointer-events-none absolute top-1/2 left-1/2 h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2';
           },
           onStateChange: (event) => {
+            if (event.data === YT.PlayerState.PLAYING) {
+              // Cross-origin iframe — nothing inside it (including its own
+              // brief play/pause icon flash on this exact transition) is
+              // reachable from our CSS/JS at all. Rather than fight that,
+              // the poster stays covering the video until we know we're
+              // past this state, so the flash plays out unseen behind it.
+              // The extra 400ms is a buffer for the flash itself, which can
+              // still be animating in the same instant this event fires.
+              revealTimer = setTimeout(() => setTrailerPlaying(true), 400);
+            }
             if (event.data === YT.PlayerState.ENDED) {
               event.target.seekTo(0, true);
               event.target.playVideo();
@@ -210,11 +222,15 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
 
     return () => {
       cancelled = true;
+      clearTimeout(revealTimer);
       player?.destroy();
       // Belt and suspenders: destroy() should already remove whatever the
       // API put here, but the host div (React-owned) must come back empty
       // regardless, ready for the next imperative mount.
       host.replaceChildren();
+      // Reset so the next mount (e.g. scrolling back into view) waits for
+      // its own PLAYING signal rather than instantly revealing a stale one.
+      setTrailerPlaying(false);
     };
   }, [showTrailer, trailerYoutubeId]);
 
@@ -248,7 +264,10 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
             fill
             priority
             sizes="100vw"
-            className={cn('object-cover sm:hidden', showTrailer && 'opacity-0 transition-opacity duration-700')}
+            className={cn(
+              'object-cover sm:hidden',
+              trailerPlaying && 'opacity-0 transition-opacity duration-700',
+            )}
           />
         )}
         {title.backdropUrl && (
@@ -260,7 +279,7 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
             sizes="100vw"
             className={cn(
               'hidden object-cover sm:block',
-              showTrailer && 'opacity-0 transition-opacity duration-700',
+              trailerPlaying && 'opacity-0 transition-opacity duration-700',
             )}
           />
         )}

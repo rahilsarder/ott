@@ -30,7 +30,7 @@ interface YoutubePlayerOptions {
 
 interface YoutubeNamespace {
   Player: new (container: HTMLElement, options: YoutubePlayerOptions) => YoutubePlayer;
-  PlayerState: { ENDED: number };
+  PlayerState: { PLAYING: number; ENDED: number };
 }
 
 declare global {
