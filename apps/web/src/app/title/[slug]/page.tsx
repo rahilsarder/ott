@@ -9,6 +9,7 @@ import type { Paginated, TitleCard as TitleCardModel, TitleDetail } from '@ott/s
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useWatchlist } from '@/lib/use-watchlist';
+import { loadYoutubeIframeApi, type YoutubePlayer } from '@/lib/youtube-iframe-api';
 import { cn, formatDuration, formatRating } from '@/lib/format';
 import { PersonCard, PosterCard } from '@/projection/cards';
 import { EpisodeRow, SeasonPicker } from '@/projection/episodes';
@@ -123,6 +124,7 @@ function TitleView({ slug }: { slug: string }) {
 function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null }) {
   const { inList, toggle, pending } = useWatchlist(title.id);
   const frameRef = useRef<HTMLDivElement>(null);
+  const playerHostRef = useRef<HTMLDivElement>(null);
   const [dwellPassed, setDwellPassed] = useState(false);
   const [inView, setInView] = useState(false);
 
@@ -144,6 +146,77 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
   // Re-entering view after the dwell has already passed resumes immediately —
   // the delay is a first-load courtesy, not something to repeat every scroll.
   const showTrailer = Boolean(title.trailerYoutubeId) && dwellPassed && inView;
+  const trailerYoutubeId = title.trailerYoutubeId;
+
+  // Plain iframe embeds have no way to react to the video ending, so a loop
+  // has to go through YouTube's own loop=1&playlist=<id> param — which
+  // triggers "playlist mode" and brings back a prev/pause/next control
+  // cluster that controls=0 does not suppress. Driving the player through
+  // the real IFrame API instead means we see the ended state ourselves and
+  // restart it manually, so nothing YouTube-owned ever needs to render.
+  //
+  // The API replaces whatever element it's given with its own iframe,
+  // entirely outside React's reconciliation. React must never be handed
+  // that element to render/unmount itself, or it eventually tries to
+  // remove a node the API already swapped out from under it and crashes
+  // ("removeChild... not a child of this node"). playerHostRef points at
+  // a permanent wrapper div (always rendered, see below); the actual
+  // mount target is created here imperatively instead, so React never
+  // tracks the node the API touches.
+  useEffect(() => {
+    if (!showTrailer || !trailerYoutubeId || !playerHostRef.current) return;
+    let cancelled = false;
+    let player: YoutubePlayer | null = null;
+    const host = playerHostRef.current;
+    const mountPoint = document.createElement('div');
+    host.appendChild(mountPoint);
+
+    void loadYoutubeIframeApi().then((YT) => {
+      if (cancelled) return;
+      player = new YT.Player(mountPoint, {
+        // Matches TrailerModal's youtube-nocookie.com choice — this plays
+        // automatically with no click from the viewer, so it should be at
+        // least as conservative about tracking cookies as the click-to-open
+        // version was.
+        host: 'https://www.youtube-nocookie.com',
+        videoId: trailerYoutubeId,
+        playerVars: {
+          autoplay: 1,
+          mute: 1,
+          controls: 0,
+          rel: 0,
+          modestbranding: 1,
+          disablekb: 1,
+          iv_load_policy: 3,
+          playsinline: 1,
+        },
+        events: {
+          onReady: (event) => {
+            // The API replaces our container with its own iframe rather than
+            // filling it, so the crop/no-interaction treatment has to be
+            // applied to that generated element directly.
+            event.target.getIframe().className =
+              'pointer-events-none absolute top-1/2 left-1/2 h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2';
+          },
+          onStateChange: (event) => {
+            if (event.data === YT.PlayerState.ENDED) {
+              event.target.seekTo(0, true);
+              event.target.playVideo();
+            }
+          },
+        },
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      player?.destroy();
+      // Belt and suspenders: destroy() should already remove whatever the
+      // API put here, but the host div (React-owned) must come back empty
+      // regardless, ready for the next imperative mount.
+      host.replaceChildren();
+    };
+  }, [showTrailer, trailerYoutubeId]);
 
   const facts = [
     formatRating(title.rating),
@@ -160,28 +233,13 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
         ref={frameRef}
         className="chamfer-lg grain-over relative aspect-[3/4] overflow-hidden bg-night-3 shadow-[0_0_90px_rgb(200_150_62/0.10)] sm:aspect-[16/9] md:aspect-[21/9]"
       >
-        {showTrailer && (
-          // Rendered only while dwelled-past and in view, so scrolling away
-          // actually stops playback (and audio) rather than just hiding it.
-          //
-          // controls=0 only hides the bottom control bar — YouTube's own
-          // hover-triggered title/channel bar and its startup info flash
-          // aren't suppressible via URL params. pointer-events-none is what
-          // actually kills the hover chrome: the viewer's cursor never
-          // reaches the iframe's own document, so YouTube's hover listener
-          // never fires in the first place. Oversizing the iframe within
-          // the frame's overflow-hidden crops the edge-anchored title flash
-          // out of view. The small corner watermark logo can't be removed
-          // this way — that's a hard YouTube platform limit, not something
-          // fixable client-side; self-hosting the trailer file is the only
-          // way around it if that becomes a problem.
-          <iframe
-            className="pointer-events-none absolute top-1/2 left-1/2 h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2"
-            src={`https://www.youtube-nocookie.com/embed/${title.trailerYoutubeId}?autoplay=1&mute=1&loop=1&playlist=${title.trailerYoutubeId}&controls=0&rel=0&modestbranding=1&disablekb=1&iv_load_policy=3&playsinline=1`}
-            title="Trailer"
-            allow="autoplay; encrypted-media"
-            tabIndex={-1}
-          />
+        {trailerYoutubeId && (
+          // Always rendered whenever there's a trailer at all — never
+          // conditioned on showTrailer. The effect above is what actually
+          // creates/destroys the player (so scrolling away genuinely stops
+          // playback and audio); this div only needs to exist as a stable
+          // home for it to imperatively mount into and clear back out of.
+          <div ref={playerHostRef} />
         )}
         {(title.posterUrl ?? title.backdropUrl) && (
           <Image
