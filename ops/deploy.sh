@@ -274,6 +274,8 @@ cd $INSTALL_DIR
 git fetch origin
 git checkout $BRANCH
 git pull origin $BRANCH
+ln -sf ../../.env apps/api/.env
+ln -sf ../../.env apps/web/.env
 pnpm install --frozen-lockfile
 pnpm --filter @ott/api exec prisma generate
 pnpm --filter @ott/api exec prisma migrate deploy
