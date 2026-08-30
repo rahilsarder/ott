@@ -280,7 +280,16 @@ pnpm install --frozen-lockfile
 pnpm --filter @ott/api exec prisma generate
 pnpm --filter @ott/api exec prisma migrate deploy
 pnpm build
-pm2 reload all
+# "pm2 reload all" assumes processes are already registered from a prior
+# completed first-time setup — on a box where an earlier first-time-setup
+# attempt wrote .env but died before reaching "pm2 start" (e.g. pnpm install
+# getting OOM-killed), "all" matches nothing, pm2 exits non-zero, and this
+# whole heredoc aborts right at the finish line under set -e, even though
+# everything up to here (migrations, build) genuinely succeeded.
+# startOrReload is idempotent either way: starts fresh if nothing's
+# registered yet, gracefully reloads in place if it is.
+pm2 startOrReload ops/ecosystem.config.js
+pm2 save
 EOF
   echo "==> Update complete: $TARGET"
   exit 0
