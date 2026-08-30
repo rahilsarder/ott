@@ -291,6 +291,16 @@ echo
 
 # --- prompts -----------------------------------------------------------------
 
+# Only ever assigned in the https branches below. The first-time-setup
+# heredoc further down references ${CERTBOT_EMAIL} unconditionally — it's
+# unquoted so HOST_NAME/BRAND_NAME/etc. interpolate into the remote script,
+# which means this shell (running under set -u) expands every ${VAR} in it
+# eagerly, before the remote `if [[ "$PROTOCOL" == https ]]` guard inside the
+# heredoc ever gets a chance to skip the certbot line at runtime. Defaulting
+# it here keeps that guard as the real branch while satisfying set -u in http
+# mode, where it's never otherwise assigned.
+CERTBOT_EMAIL=""
+
 if [[ "$NON_INTERACTIVE" == true ]]; then
   PROTOCOL="$(resolve_value "" DEPLOY_PROTOCOL required)"
   HOST_NAME="$(resolve_value "" DEPLOY_HOST_NAME required)"
