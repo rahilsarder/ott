@@ -268,6 +268,33 @@ fi
 
 if ssh "$TARGET" "test -f $INSTALL_DIR/.env" 2>/dev/null; then
   echo "==> Existing deploy found at $TARGET:$INSTALL_DIR — updating."
+
+  # Self-heal a box whose first-time setup died before reaching the nginx
+  # step — same "an earlier attempt got interrupted" situation the symlink
+  # and pm2 steps below already guard against. Rendered locally and scp'd
+  # over, never built inside the remote heredoc below: nginx's own
+  # $host/$request_uri/etc. must reach the file untouched, and mixing that
+  # with this script's own heredoc interpolation is exactly how they end up
+  # as literal "\$host" in a live config (see render_port80_conf above).
+  if ! ssh "$TARGET" "test -f /etc/nginx/sites-available/ott" 2>/dev/null; then
+    echo "==> nginx site config missing on $TARGET — an earlier first-time-setup attempt likely didn't finish. Installing it now."
+    EXISTING_ORIGIN="$(current_web_origin)"
+    if [[ "$EXISTING_ORIGIN" == https://* ]]; then
+      echo "    WEB_ORIGIN is https — that also needs a TLS cert, which this does not attempt automatically." >&2
+      echo "    Fix nginx/certbot on $TARGET by hand, or start the box over." >&2
+    else
+      render_port80_conf "$(strip_scheme "$EXISTING_ORIGIN")" "$INSTALL_DIR" "$SCRATCH/nginx.conf"
+      scp "$SCRATCH/nginx.conf" "$TARGET:/tmp/ott-nginx.conf"
+      ssh "$TARGET" bash -s <<NGINXFIX
+set -euo pipefail
+cp /tmp/ott-nginx.conf /etc/nginx/sites-available/ott
+ln -sf /etc/nginx/sites-available/ott /etc/nginx/sites-enabled/ott
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx
+NGINXFIX
+    fi
+  fi
+
   ssh "$TARGET" bash -s <<EOF
 set -euo pipefail
 cd $INSTALL_DIR
@@ -279,6 +306,17 @@ ln -sf ../../.env apps/web/.env
 pnpm install --frozen-lockfile
 pnpm --filter @ott/api exec prisma generate
 pnpm --filter @ott/api exec prisma migrate deploy
+
+# Self-heal a box whose first-time setup died before ever seeding — the
+# schema is migrated (above) so the app will build and run, but with no
+# admin account at all if this is skipped. seed-admin-only.ts only creates
+# the admin; it does not touch the demo/catalog seed, so this can't collide
+# with a real catalog restored separately.
+if [ "\$(sudo -u postgres psql -d ott -tAc 'SELECT count(*) FROM "User";')" = "0" ]; then
+  echo "No admin user found in the database — seeding one now."
+  pnpm --filter @ott/api exec tsx prisma/seed-admin-only.ts
+fi
+
 pnpm build
 # "pm2 reload all" assumes processes are already registered from a prior
 # completed first-time setup — on a box where an earlier first-time-setup
@@ -453,6 +491,22 @@ ssh "$TARGET" bash -s <<EOF
 set -euo pipefail
 
 apt update -qq
+
+# pnpm install below builds several native modules (sharp, esbuild, argon2,
+# Prisma engines) alongside the rest of the toolchain — on a box with 1-2GB
+# RAM and no swap, that combination can get OOM-killed partway through
+# (hit this for real on a fresh VPS: "Killed  pnpm install --frozen-lockfile",
+# which left the box in a half-provisioned state — .env and the DB role
+# existed, but nothing after the kill ever ran). Idempotent: skipped if swap
+# is already configured.
+if [ "\$(swapon --show | wc -l)" -eq 0 ]; then
+  fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 apt install -y -qq nginx postgresql redis git curl
 command -v node >/dev/null || { curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null; apt install -y -qq nodejs; }
 command -v pnpm >/dev/null || npm i -g pnpm >/dev/null
