@@ -275,6 +275,7 @@ git fetch origin
 git checkout $BRANCH
 git pull origin $BRANCH
 pnpm install --frozen-lockfile
+pnpm --filter @ott/api exec prisma generate
 pnpm --filter @ott/api exec prisma migrate deploy
 pnpm build
 pm2 reload all
