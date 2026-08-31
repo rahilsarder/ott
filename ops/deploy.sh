@@ -322,6 +322,7 @@ cd $INSTALL_DIR
 git fetch origin
 git checkout $BRANCH
 git pull origin $BRANCH
+echo "Deployed commit: \$(git rev-parse HEAD)"
 ln -sf ../../.env apps/api/.env
 ln -sf ../../.env apps/web/.env
 $ENV_SYNC_CMDS
@@ -546,6 +547,7 @@ if [ -d .git ]; then
 else
   git clone --branch $BRANCH $REPO_URL .
 fi
+echo "Deployed commit: \$(git rev-parse HEAD)"
 
 mv /tmp/ott.env .env
 ln -sf ../../.env apps/api/.env
