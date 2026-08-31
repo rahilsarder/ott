@@ -223,20 +223,46 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
   const toggleFullscreen = useCallback(async () => {
     const el = containerRef.current;
     if (!el) return;
-    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
-    else await el.requestFullscreen().catch(() => undefined);
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+    if (el.requestFullscreen) {
+      await el.requestFullscreen().catch(() => undefined);
+      return;
+    }
+    // iOS Safari never implemented the Fullscreen API for arbitrary elements —
+    // only <video> supports it, via this iOS-only method.
+    const video = videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+    video?.webkitEnterFullscreen?.();
   }, []);
 
   useEffect(() => {
+    const video = videoRef.current;
     const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
+    // The iOS fallback above enters native video fullscreen, which never fires
+    // `fullscreenchange` — it fires these events on the video element instead.
+    const onIosBegin = () => setFullscreen(true);
+    const onIosEnd = () => setFullscreen(false);
     document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
+    video?.addEventListener('webkitbeginfullscreen', onIosBegin);
+    video?.addEventListener('webkitendfullscreen', onIosEnd);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      video?.removeEventListener('webkitbeginfullscreen', onIosBegin);
+      video?.removeEventListener('webkitendfullscreen', onIosEnd);
+    };
   }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      // The scrubber and volume control are <input type="range"> — real text
+      // fields (INPUT of any other type, TEXTAREA, SELECT) still opt out, but
+      // our own sliders shouldn't silently swallow every shortcut just
+      // because the viewer last clicked one to seek or adjust volume.
+      const isOwnSlider = target?.tagName === 'INPUT' && (target as HTMLInputElement).type === 'range';
+      if (target && !isOwnSlider && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
 
       switch (event.key) {
         case ' ':
@@ -245,9 +271,11 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
           togglePlay();
           break;
         case 'ArrowRight':
+          event.preventDefault();
           seekBy(SEEK_STEP_SEC);
           break;
         case 'ArrowLeft':
+          event.preventDefault();
           seekBy(-SEEK_STEP_SEC);
           break;
         case 'ArrowUp':

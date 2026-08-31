@@ -114,6 +114,7 @@ export function PlayerControls(props: Props) {
               step={0.5}
               value={currentTime}
               onChange={(e) => props.onSeek(Number(e.target.value))}
+              onPointerUp={(e) => e.currentTarget.blur()}
               aria-label="Seek"
             />
           </div>
@@ -147,6 +148,7 @@ export function PlayerControls(props: Props) {
               step={0.05}
               value={muted ? 0 : volume}
               onChange={(e) => props.onVolume(Number(e.target.value))}
+              onPointerUp={(e) => e.currentTarget.blur()}
               aria-label="Volume"
             />
           </div>
