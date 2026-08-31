@@ -295,6 +295,27 @@ NGINXFIX
     fi
   fi
 
+  # deploy.sh only ever writes .env once, during first-time setup — the
+  # update path above (git pull/build/reload) never touches it again, so an
+  # edit made in Jarvis after that (a corrected Flussonic URL, a renamed
+  # brand) silently never reaches the box until someone patches .env by hand
+  # (exactly what just happened for revera.ihub.live). Non-interactive mode
+  # is Jarvis's own interface to this script — DEPLOY_* env vars are only
+  # ever set when something is driving it non-interactively, so this only
+  # fires for that caller; syncing them for an interactive human running
+  # "ops/deploy.sh myhost" to pull new code would silently blank these
+  # fields (DEPLOY_FLUSSONIC_BASE_URL etc. are never set there), which is
+  # worse than not syncing at all.
+  ENV_SYNC_CMDS="true  # nothing to sync (interactive mode)"
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    ENV_SYNC_CMDS=$(cat <<SYNC
+sed -i "s|^FLUSSONIC_BASE_URL=.*|FLUSSONIC_BASE_URL=${DEPLOY_FLUSSONIC_BASE_URL:-}|" .env
+sed -i "s|^FLUSSONIC_SECURELINK_KEY=.*|FLUSSONIC_SECURELINK_KEY=${DEPLOY_FLUSSONIC_SECURELINK_KEY:-}|" .env
+sed -i "s|^NEXT_PUBLIC_BRAND_NAME=.*|NEXT_PUBLIC_BRAND_NAME=${DEPLOY_BRAND_NAME:-Streamly}|" .env
+SYNC
+)
+  fi
+
   ssh "$TARGET" bash -s <<EOF
 set -euo pipefail
 cd $INSTALL_DIR
@@ -303,6 +324,7 @@ git checkout $BRANCH
 git pull origin $BRANCH
 ln -sf ../../.env apps/api/.env
 ln -sf ../../.env apps/web/.env
+$ENV_SYNC_CMDS
 pnpm install --frozen-lockfile
 pnpm --filter @ott/api exec prisma generate
 pnpm --filter @ott/api exec prisma migrate deploy
