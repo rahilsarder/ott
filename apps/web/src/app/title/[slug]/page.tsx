@@ -205,8 +205,21 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
             // The API replaces our container with its own iframe rather than
             // filling it, so the crop/no-interaction treatment has to be
             // applied to that generated element directly.
+            //
+            // A flat oversize (e.g. 130%/130% at every breakpoint) only covers
+            // the frame when the frame's own aspect ratio is already close to
+            // the video's 16:9 — true at sm (16:9) and roughly true at md
+            // (21:9), but badly wrong at the mobile default (3:4, portrait):
+            // a 16:9 video filling 130% of a 3:4 box's width is still far
+            // shorter than the box is tall, so YouTube's own iframe-internal
+            // placement of the video within that leftover space (observed:
+            // bottom-anchored, not centered) shows up as a large empty gap
+            // rather than a vertically-centered trailer. Each breakpoint's
+            // width/height is sized to just cover that breakpoint's real
+            // aspect ratio (the same math as `object-fit: cover`), with a
+            // couple of percent of slack against rounding.
             event.target.getIframe().className =
-              'pointer-events-none absolute top-1/2 left-1/2 h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2';
+              'pointer-events-none absolute top-1/2 left-1/2 h-full w-[239%] -translate-x-1/2 -translate-y-1/2 sm:w-full md:h-[133%]';
           },
           onStateChange: (event) => {
             if (event.data === YT.PlayerState.PLAYING) {
