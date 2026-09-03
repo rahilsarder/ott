@@ -111,6 +111,14 @@ export const SettingsIcon = (p: IconProps) => (
   </svg>
 );
 
+export const SpeedIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 15a8 8 0 1 1 16 0" />
+    <path d="M12 15 16 9" />
+    <circle cx="12" cy="15" r="1.3" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 export const SubtitlesIcon = (p: IconProps) => (
   <svg {...base(p)} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="5" width="20" height="14" rx="2" />

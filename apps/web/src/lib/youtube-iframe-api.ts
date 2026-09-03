@@ -8,6 +8,8 @@ export interface YoutubePlayer {
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   getIframe(): HTMLIFrameElement;
   destroy(): void;
+  mute(): void;
+  unMute(): void;
 }
 
 interface YoutubePlayerEvent {

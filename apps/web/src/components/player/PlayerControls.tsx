@@ -16,9 +16,12 @@ import {
   PauseIcon,
   PlayIcon,
   SettingsIcon,
+  SpeedIcon,
   SubtitlesIcon,
   VolumeIcon,
 } from '@/components/icons';
+
+const PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2];
 
 interface Props {
   session: PlaybackSession;
@@ -28,6 +31,7 @@ interface Props {
   duration: number;
   volume: number;
   muted: boolean;
+  playbackRate: number;
   fullscreen: boolean;
   qualities: HlsQuality[];
   currentQuality: number;
@@ -38,6 +42,7 @@ interface Props {
   onSeekBy: (delta: number) => void;
   onVolume: (value: number) => void;
   onToggleMute: () => void;
+  onPlaybackRate: (rate: number) => void;
   onToggleFullscreen: () => void;
   onQuality: (index: number) => void;
   onSubtitleSelect: (index: number | null) => void;
@@ -53,6 +58,7 @@ export function PlayerControls(props: Props) {
     duration,
     volume,
     muted,
+    playbackRate,
     fullscreen,
     qualities,
     currentQuality,
@@ -60,7 +66,7 @@ export function PlayerControls(props: Props) {
     activeSubtitle,
   } = props;
 
-  const [openMenu, setOpenMenu] = useState<'quality' | 'subtitles' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'quality' | 'subtitles' | 'speed' | null>(null);
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -120,29 +126,35 @@ export function PlayerControls(props: Props) {
           </div>
         )}
 
-        <div className="flex items-center gap-3 md:gap-5">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-3 md:gap-5">
           <ControlButton onClick={props.onTogglePlay} label={playing ? 'Pause' : 'Play'}>
-            {playing ? <PauseIcon className="h-7 w-7" /> : <PlayIcon className="h-7 w-7" />}
+            {playing ? <PauseIcon className="h-6 w-6 md:h-7 md:w-7" /> : <PlayIcon className="h-6 w-6 md:h-7 md:w-7" />}
           </ControlButton>
 
           {!session.isLive && (
             <>
               <ControlButton onClick={() => props.onSeekBy(-10)} label="Back 10 seconds">
-                <BackTenIcon className="h-6 w-6" />
+                <BackTenIcon className="h-5 w-5 md:h-6 md:w-6" />
               </ControlButton>
               <ControlButton onClick={() => props.onSeekBy(10)} label="Forward 10 seconds">
-                <ForwardTenIcon className="h-6 w-6" />
+                <ForwardTenIcon className="h-5 w-5 md:h-6 md:w-6" />
               </ControlButton>
             </>
           )}
 
+          {/* Volume slider needs hover to reveal and is fiddly on a touchscreen anyway — hardware
+              volume buttons already control it there, so only the mute toggle shows below sm. */}
           <div className="group/vol flex items-center gap-2">
             <ControlButton onClick={props.onToggleMute} label={muted ? 'Unmute' : 'Mute'}>
-              {muted || volume === 0 ? <MuteIcon className="h-6 w-6" /> : <VolumeIcon className="h-6 w-6" />}
+              {muted || volume === 0 ? (
+                <MuteIcon className="h-5 w-5 md:h-6 md:w-6" />
+              ) : (
+                <VolumeIcon className="h-5 w-5 md:h-6 md:w-6" />
+              )}
             </ControlButton>
             <input
               type="range"
-              className="scrubber h-1 w-0 rounded-full bg-bone/25 opacity-0 transition-all duration-200 group-hover/vol:w-24 group-hover/vol:opacity-100 focus:w-24 focus:opacity-100"
+              className="scrubber hidden h-1 w-0 rounded-full bg-bone/25 opacity-0 transition-all duration-200 sm:block group-hover/vol:w-24 group-hover/vol:opacity-100 focus:w-24 focus:opacity-100"
               min={0}
               max={1}
               step={0.05}
@@ -153,18 +165,18 @@ export function PlayerControls(props: Props) {
             />
           </div>
 
-          <span className="label-mono tabular-nums text-ash">
+          <span className="label-mono shrink-0 tabular-nums text-ash">
             {session.isLive ? 'Live' : `${formatClock(currentTime)} / ${formatClock(duration)}`}
           </span>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-3">
             {subtitleOptions.length > 0 && (
               <div className="relative">
                 <ControlButton
                   onClick={() => setOpenMenu((m) => (m === 'subtitles' ? null : 'subtitles'))}
                   label="Subtitles"
                 >
-                  <SubtitlesIcon className={cn('h-6 w-6', activeSubtitle !== null && 'text-brass-hot')} />
+                  <SubtitlesIcon className={cn('h-5 w-5 md:h-6 md:w-6', activeSubtitle !== null && 'text-brass-hot')} />
                 </ControlButton>
                 {openMenu === 'subtitles' && (
                   <div className="chamfer-sm absolute right-0 bottom-12 w-44 overflow-hidden border border-hairline bg-night/97 py-1 text-sm backdrop-blur">
@@ -195,7 +207,7 @@ export function PlayerControls(props: Props) {
             {qualities.length > 1 && (
               <div className="relative">
                 <ControlButton onClick={() => setOpenMenu((m) => (m === 'quality' ? null : 'quality'))} label="Quality">
-                  <SettingsIcon className="h-6 w-6" />
+                  <SettingsIcon className="h-5 w-5 md:h-6 md:w-6" />
                 </ControlButton>
                 {openMenu === 'quality' && (
                   <div className="chamfer-sm absolute right-0 bottom-12 w-40 overflow-hidden border border-hairline bg-night/97 py-1 text-sm backdrop-blur">
@@ -223,8 +235,33 @@ export function PlayerControls(props: Props) {
               </div>
             )}
 
+            <div className="relative">
+              <ControlButton onClick={() => setOpenMenu((m) => (m === 'speed' ? null : 'speed'))} label="Playback speed">
+                <SpeedIcon className={cn('h-5 w-5 md:h-6 md:w-6', playbackRate !== 1 && 'text-brass-hot')} />
+              </ControlButton>
+              {openMenu === 'speed' && (
+                <div className="chamfer-sm absolute right-0 bottom-12 w-32 overflow-hidden border border-hairline bg-night/97 py-1 text-sm backdrop-blur">
+                  {PLAYBACK_RATES.map((rate) => (
+                    <MenuOption
+                      key={rate}
+                      label={`${rate}x`}
+                      active={playbackRate === rate}
+                      onClick={() => {
+                        props.onPlaybackRate(rate);
+                        setOpenMenu(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
             <ControlButton onClick={props.onToggleFullscreen} label="Fullscreen">
-              {fullscreen ? <FullscreenExitIcon className="h-6 w-6" /> : <FullscreenIcon className="h-6 w-6" />}
+              {fullscreen ? (
+                <FullscreenExitIcon className="h-5 w-5 md:h-6 md:w-6" />
+              ) : (
+                <FullscreenIcon className="h-5 w-5 md:h-6 md:w-6" />
+              )}
             </ControlButton>
           </div>
         </div>

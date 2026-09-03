@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { PlaybackSession } from '@ott/shared';
 import { api } from '@/lib/api';
 import { cn, formatClock } from '@/lib/format';
+import { getLocalProgress, saveLocalProgress } from '@/lib/local-progress';
 import { useSession } from '@/lib/session';
 import { useHlsPlayer } from '@/lib/use-hls-player';
 import { useSubtitleTracks } from '@/lib/use-subtitle-tracks';
@@ -28,6 +29,7 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
   const [duration, setDuration] = useState(initial.durationSec ?? 0);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [showNextCard, setShowNextCard] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -75,14 +77,20 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
   }, [remintToken, player]);
 
   // Seek to the saved resume position once the media knows its own duration.
+  // The server position wins when it has one; local storage is only consulted
+  // when it doesn't (an anonymous viewer, who the server never tracks at all).
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !player.ready || session.isLive) return;
-    if (session.startPositionSec > 0 && Math.abs(video.currentTime - session.startPositionSec) > 2) {
-      video.currentTime = session.startPositionSec;
+    const resumeAt =
+      session.startPositionSec > 0
+        ? session.startPositionSec
+        : (getLocalProgress(session.kind, session.id)?.positionSec ?? 0);
+    if (resumeAt > 0 && Math.abs(video.currentTime - resumeAt) > 2) {
+      video.currentTime = resumeAt;
     }
     void video.play().catch(() => undefined);
-  }, [player.ready, session.startPositionSec, session.isLive]);
+  }, [player.ready, session.startPositionSec, session.isLive, session.kind, session.id]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -96,6 +104,7 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
       setVolume(video.volume);
       setMuted(video.muted);
     };
+    const onRateChange = () => setPlaybackRate(video.playbackRate);
     const onEnded = () => {
       if (session.nextEpisodeId) setShowNextCard(true);
     };
@@ -105,6 +114,7 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('volumechange', onVolume);
+    video.addEventListener('ratechange', onRateChange);
     video.addEventListener('ended', onEnded);
 
     return () => {
@@ -113,15 +123,18 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('volumechange', onVolume);
+      video.removeEventListener('ratechange', onRateChange);
       video.removeEventListener('ended', onEnded);
     };
   }, [session.nextEpisodeId]);
 
   // Progress heartbeat. Live has no meaningful resume position, so it is skipped.
-  // Anonymous viewers have no profile to scope progress to — the API would just
-  // 401 every interval, so skip starting the loop at all rather than fail silently.
+  // The server call is still profile-scoped (anonymous viewers have no profile
+  // to POST against — that'd just 401 every interval), but the local-storage
+  // mirror always runs regardless of profile: it's the only persistence an
+  // anonymous viewer gets, and every viewer gets an instant local fallback.
   useEffect(() => {
-    if (session.isLive || session.kind === 'channel' || !profile) return;
+    if (session.isLive || session.kind === 'channel') return;
 
     /**
      * `keepalive` lets the request outlive the page, which sendBeacon would also
@@ -131,15 +144,15 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
       const video = videoRef.current;
       if (!video || !video.duration || !Number.isFinite(video.duration)) return;
 
+      const positionSec = Math.floor(video.currentTime);
+      const durationSec = Math.floor(video.duration);
+      saveLocalProgress(session.kind, session.id, positionSec, durationSec);
+
+      if (!profile) return;
       void api<void>('/progress', {
         method: 'POST',
         keepalive: surviveUnload,
-        body: {
-          kind: session.kind as 'movie' | 'episode',
-          id: session.id,
-          positionSec: Math.floor(video.currentTime),
-          durationSec: Math.floor(video.duration),
-        },
+        body: { kind: session.kind as 'movie' | 'episode', id: session.id, positionSec, durationSec },
       }).catch(() => undefined);
     };
 
@@ -206,6 +219,13 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
     },
     [session.isLive, nudgeControls],
   );
+
+  const changePlaybackRate = useCallback((rate: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.playbackRate = rate;
+    setPlaybackRate(rate);
+  }, []);
 
   const changeVolume = useCallback((value: number) => {
     const video = videoRef.current;
@@ -367,6 +387,7 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
         duration={duration}
         volume={volume}
         muted={muted}
+        playbackRate={playbackRate}
         fullscreen={fullscreen}
         qualities={player.qualities}
         currentQuality={player.currentQuality}
@@ -377,6 +398,7 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
         onSeekBy={seekBy}
         onVolume={changeVolume}
         onToggleMute={toggleMute}
+        onPlaybackRate={changePlaybackRate}
         onToggleFullscreen={() => void toggleFullscreen()}
         onQuality={player.setQuality}
         onSubtitleSelect={subtitleTracks.select}

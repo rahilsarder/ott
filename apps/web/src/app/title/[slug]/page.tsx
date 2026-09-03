@@ -11,6 +11,7 @@ import { useSession } from '@/lib/session';
 import { useWatchlist } from '@/lib/use-watchlist';
 import { loadYoutubeIframeApi, type YoutubePlayer } from '@/lib/youtube-iframe-api';
 import { cn, formatDuration, formatRating } from '@/lib/format';
+import { MuteIcon, VolumeIcon } from '@/components/icons';
 import { PersonCard, PosterCard } from '@/projection/cards';
 import { EpisodeRow, SeasonPicker } from '@/projection/episodes';
 import { TabBar, TopNav } from '@/projection/shell';
@@ -125,9 +126,15 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
   const { inList, toggle, pending } = useWatchlist(title.id);
   const frameRef = useRef<HTMLDivElement>(null);
   const playerHostRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<YoutubePlayer | null>(null);
   const [dwellPassed, setDwellPassed] = useState(false);
   const [inView, setInView] = useState(false);
   const [trailerPlaying, setTrailerPlaying] = useState(false);
+  // Starts muted on every (re)mount — required for autoplay to reliably work at
+  // all across browsers — with a visible toggle so a viewer can opt into sound
+  // with one real click, which also satisfies the browser's user-gesture
+  // requirement for audio.
+  const [trailerMuted, setTrailerMuted] = useState(true);
 
   useEffect(() => {
     if (!title.trailerYoutubeId) return;
@@ -194,6 +201,7 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
         },
         events: {
           onReady: (event) => {
+            playerRef.current = event.target;
             // The API replaces our container with its own iframe rather than
             // filling it, so the crop/no-interaction treatment has to be
             // applied to that generated element directly.
@@ -224,15 +232,26 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
       cancelled = true;
       clearTimeout(revealTimer);
       player?.destroy();
+      playerRef.current = null;
       // Belt and suspenders: destroy() should already remove whatever the
       // API put here, but the host div (React-owned) must come back empty
       // regardless, ready for the next imperative mount.
       host.replaceChildren();
       // Reset so the next mount (e.g. scrolling back into view) waits for
-      // its own PLAYING signal rather than instantly revealing a stale one.
+      // its own PLAYING signal rather than instantly revealing a stale one,
+      // and so the mute button reflects the fresh player's real muted-by-default state.
       setTrailerPlaying(false);
+      setTrailerMuted(true);
     };
   }, [showTrailer, trailerYoutubeId]);
+
+  const toggleTrailerMute = () => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (trailerMuted) player.unMute();
+    else player.mute();
+    setTrailerMuted((m) => !m);
+  };
 
   const facts = [
     formatRating(title.rating),
@@ -287,6 +306,16 @@ function Hero({ title, playHref }: { title: TitleDetail; playHref: string | null
           className="absolute inset-0"
           style={{ background: 'radial-gradient(70% 90% at 58% 45%, transparent 28%, rgb(10 9 8 / 0.88) 100%)' }}
         />
+        {trailerPlaying && (
+          <button
+            onClick={toggleTrailerMute}
+            aria-label={trailerMuted ? 'Unmute trailer' : 'Mute trailer'}
+            title={trailerMuted ? 'Unmute trailer' : 'Mute trailer'}
+            className="focus-brass chamfer-sm absolute top-4 right-4 z-2 bg-night/50 p-2.5 text-bone/90 backdrop-blur transition hover:bg-night/80 hover:text-brass-hot md:top-6 md:right-6"
+          >
+            {trailerMuted ? <MuteIcon className="h-5 w-5" /> : <VolumeIcon className="h-5 w-5" />}
+          </button>
+        )}
         <span className="absolute inset-x-0 bottom-0 h-2/3 bg-linear-to-t from-night via-night/80 to-transparent md:hidden" />
       </div>
 
