@@ -72,6 +72,27 @@ export const SearchIcon = (p: IconProps) => (
   </svg>
 );
 
+export const HomeIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="m3.5 11 8.5-7.5 8.5 7.5" />
+    <path d="M5.5 9.5V19a1 1 0 0 0 1 1H9.5v-6a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v6h3a1 1 0 0 0 1-1V9.5" />
+  </svg>
+);
+
+export const MoviesIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 9h18M4 9l1.5-4.5h3L7 9m2 0 1.5-4.5h3L12 9m2 0 1.5-4.5h3L17 9" />
+    <rect x="3" y="9" width="18" height="11" rx="1.5" />
+  </svg>
+);
+
+export const SeriesIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <rect x="7" y="3" width="14" height="9" rx="1.5" />
+    <path d="M3 9v9.5A1.5 1.5 0 0 0 4.5 20H17" />
+  </svg>
+);
+
 export const CloseIcon = (p: IconProps) => (
   <svg {...base(p)} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
     <path d="M18 6 6 18M6 6l12 12" />

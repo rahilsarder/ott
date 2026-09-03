@@ -4,17 +4,19 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { Channel } from '@ott/shared';
+import { HomeIcon, MoviesIcon, SearchIcon, SeriesIcon, TvIcon } from '@/components/icons';
 import { cn } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { LiveDot, LocalTime } from './ui';
 
-/* Saved lives under the avatar, not in the bar — it is a profile thing. */
+/* Saved lives under the avatar, not in the bar — it is a profile thing.
+ * icon is only used by the phone tab bar — the desktop nav is text-only. */
 const NAV = [
-  { href: '/', label: 'Home' },
-  { href: '/live', label: 'Live' },
-  { href: '/movies', label: 'Movies' },
-  { href: '/series', label: 'Series' },
-  { href: '/search', label: 'Search' },
+  { href: '/', label: 'Home', icon: HomeIcon },
+  { href: '/live', label: 'Live', icon: TvIcon },
+  { href: '/movies', label: 'Movies', icon: MoviesIcon },
+  { href: '/series', label: 'Series', icon: SeriesIcon },
+  { href: '/search', label: 'Search', icon: SearchIcon },
 ] as const;
 
 /* ── Desktop nav ─────────────────────────────────────────────────────────── */
@@ -185,6 +187,7 @@ export function TabBar() {
     <nav className="fixed inset-x-0 bottom-0 z-50 flex border-t border-hairline bg-night-2 px-2 pt-2 pb-3 md:hidden">
       {NAV.map((item) => {
         const active = pathname === item.href;
+        const Icon = item.icon;
         return (
           <Link
             key={item.href}
@@ -192,12 +195,7 @@ export function TabBar() {
             aria-current={active ? 'page' : undefined}
             className="focus-brass flex flex-1 flex-col items-center gap-1 no-underline"
           >
-            <span
-              className={cn(
-                'chamfer-sm size-4 border transition',
-                active ? 'border-brass bg-brass/25' : 'border-ash-dim',
-              )}
-            />
+            <Icon className={cn('size-5 transition', active ? 'text-brass-hot' : 'text-ash-dim')} />
             <span className={cn('label-mono text-[0.4375rem]', active ? 'text-brass-hot' : 'text-ash-dim')}>
               {item.label}
             </span>
