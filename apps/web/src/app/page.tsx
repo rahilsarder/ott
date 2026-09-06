@@ -1,9 +1,11 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Channel, HomeResponse } from '@ott/shared';
+import type { Channel, HomeResponse, Rail } from '@ott/shared';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
+import { useLocalContinueWatching } from '@/lib/use-local-continue-watching';
 import { useWatchlist } from '@/lib/use-watchlist';
 import { FeatureFrame, FeatureFrameSkeleton } from '@/projection/FeatureFrame';
 import { RailRow, RailRowSkeleton } from '@/projection/RailRow';
@@ -24,6 +26,26 @@ function Home() {
     queryKey: ['home', profile?.id],
     queryFn: () => api<HomeResponse>('/home'),
   });
+
+  // Signed-in progress is already spliced into `data.rails` server-side
+  // (RailsService.home). An anonymous viewer has no profile for the server
+  // to scope that to, so it's rebuilt here from localStorage instead —
+  // disabled entirely once signed in, so the two are never both showing.
+  const localContinueItems = useLocalContinueWatching(!profile);
+  const rails = useMemo<Rail[]>(() => {
+    if (!data) return [];
+    if (localContinueItems.length === 0) return data.rails;
+    return [
+      {
+        kind: 'continue',
+        id: 'continue-local',
+        title: 'Carry on watching',
+        meta: `${localContinueItems.length} in progress`,
+        continueItems: localContinueItems,
+      },
+      ...data.rails,
+    ];
+  }, [data, localContinueItems]);
 
   // The on-air strip is its own query: it changes on the hour, while the rest
   // of home is cached for five minutes.
@@ -71,7 +93,7 @@ function Home() {
           )}
 
           {/* Alternating anchors: every other shelf leads from the right. */}
-          {data.rails.map((rail, index) => (
+          {rails.map((rail, index) => (
             <RailRow key={rail.id} rail={rail} flip={index % 2 === 1} />
           ))}
         </main>

@@ -4,6 +4,8 @@ import {
   RESUME_MAX_FRACTION,
   RESUME_MIN_FRACTION,
   type CatalogQuery,
+  type ContinueHydrationRequest,
+  type ContinueHydrationResult,
   type CreditSummary,
   type Genre,
   type Paginated,
@@ -142,6 +144,46 @@ export class CatalogService {
       roles: [...new Set(titles.flatMap((t) => t.role.split(', ')))],
       titles,
     };
+  }
+
+  /**
+   * Resolves an anonymous viewer's localStorage progress entries (kind + id
+   * only — positionSec/durationSec never leave the browser) into the same
+   * title-card + label shape ProgressService.continueWatching returns for a
+   * signed-in profile, so the client can render both through the same
+   * ContinueItem-shaped rail. Stale ids (deleted or unpublished since) are
+   * silently dropped rather than erroring — the client just won't show them.
+   */
+  async hydrateContinue(items: ContinueHydrationRequest['items']): Promise<ContinueHydrationResult[]> {
+    const movieIds = items.filter((i) => i.kind === 'movie').map((i) => i.id);
+    const episodeIds = items.filter((i) => i.kind === 'episode').map((i) => i.id);
+
+    const [movies, episodes] = await Promise.all([
+      movieIds.length
+        ? this.prisma.title.findMany({ where: { id: { in: movieIds }, isPublished: true }, select: titleCardSelect })
+        : Promise.resolve([]),
+      episodeIds.length
+        ? this.prisma.episode.findMany({
+            where: { id: { in: episodeIds }, title: { isPublished: true } },
+            include: { title: { select: titleCardSelect }, season: { select: { number: true } } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const movieResults: ContinueHydrationResult[] = movies.map((m) => ({
+      kind: 'movie',
+      id: m.id,
+      title: toTitleCard(m),
+      label: m.name,
+    }));
+    const episodeResults: ContinueHydrationResult[] = episodes.map((e) => ({
+      kind: 'episode',
+      id: e.id,
+      title: toTitleCard(e.title),
+      label: `S${e.season.number} E${e.number} · ${e.name}`,
+    }));
+
+    return [...movieResults, ...episodeResults];
   }
 }
 

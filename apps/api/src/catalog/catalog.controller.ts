@@ -1,10 +1,13 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   browseQuerySchema,
   catalogQuerySchema,
+  continueHydrationSchema,
   type BrowseQuery,
   type BrowseResponse,
   type CatalogQuery,
+  type ContinueHydrationRequest,
+  type ContinueHydrationResult,
   type Genre,
   type Paginated,
   type PersonDetail,
@@ -48,5 +51,13 @@ export class CatalogController {
   @Get('people/:id')
   person(@Param('id') id: string): Promise<PersonDetail> {
     return this.catalog.person(id);
+  }
+
+  /** Hydrates an anonymous viewer's localStorage progress entries into title cards. */
+  @Post('continue-hydrate')
+  continueHydrate(
+    @Body(zodPipe(continueHydrationSchema)) body: ContinueHydrationRequest,
+  ): Promise<ContinueHydrationResult[]> {
+    return this.catalog.hydrateContinue(body.items);
   }
 }

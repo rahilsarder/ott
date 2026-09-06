@@ -45,6 +45,27 @@ export function getLocalProgress(kind: string, id: string): LocalProgressEntry |
   return readStore()[storageKey(kind, id)] ?? null;
 }
 
+export interface LocalProgressItem extends LocalProgressEntry {
+  kind: 'movie' | 'episode';
+  id: string;
+}
+
+/** Every stored entry, most recently updated first — the anonymous "Carry on
+ *  watching" rail's source of truth (the signed-in rail reads real profile
+ *  rows server-side instead; this is what an anonymous viewer has in its place). */
+export function listLocalProgress(): LocalProgressItem[] {
+  const store = readStore();
+  return Object.entries(store)
+    .map(([key, entry]) => {
+      const sepIndex = key.indexOf(':');
+      const kind = key.slice(0, sepIndex);
+      const id = key.slice(sepIndex + 1);
+      return kind === 'movie' || kind === 'episode' ? { kind, id, ...entry } : null;
+    })
+    .filter((item): item is LocalProgressItem => item !== null)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
 export function saveLocalProgress(kind: string, id: string, positionSec: number, durationSec: number): void {
   const store = readStore();
   store[storageKey(kind, id)] = { positionSec, durationSec, updatedAt: Date.now() };
