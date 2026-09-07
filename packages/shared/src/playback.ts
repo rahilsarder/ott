@@ -29,4 +29,8 @@ export interface PlaybackSession {
   subtitles: PlaybackTrack[];
   /** Present for series episodes so the player can auto-advance. */
   nextEpisodeId: string | null;
+  /** Series-level override for how early to offer "Play next episode", in
+   *  seconds before this episode's own end. Null (no override set, or not an
+   *  episode at all) means the player should use its own fixed default. */
+  creditsLeadSec: number | null;
 }

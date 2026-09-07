@@ -15,6 +15,8 @@ import { NextEpisodeCard } from './NextEpisodeCard';
 const HEARTBEAT_INTERVAL_MS = 15_000;
 const CONTROLS_IDLE_MS = 3000;
 const SEEK_STEP_SEC = 10;
+/** Used when a series has no admin-set creditsLeadSec — see PlaybackSession.creditsLeadSec. */
+const DEFAULT_CREDITS_LEAD_SEC = 60;
 
 export function VideoPlayer({ session: initial }: { session: PlaybackSession }) {
   const router = useRouter();
@@ -31,8 +33,16 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
   const [muted, setMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [showNextCard, setShowNextCard] = useState(false);
+  // 'early' = still inside the credits-lead heuristic window (offer only, no forced
+  // auto-advance); 'ended' = the video has genuinely finished (safe to auto-advance).
+  const [nextCardTrigger, setNextCardTrigger] = useState<'early' | 'ended' | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  // Persists across a "Dismiss" click on the *early* offer for the rest of this episode —
+  // otherwise the very next timeupdate tick (still inside the credits window) would immediately
+  // re-show it. Does not suppress the true `ended` trigger — dismissing "skip now" just means
+  // "let me watch the rest of this episode", not "never offer the next one at all". A full
+  // remount (moving to a genuinely different episode) resets this along with everything else.
+  const nextCardDismissedRef = useRef(false);
 
   /**
    * `router.back()` silently does nothing when the player was opened directly —
@@ -96,7 +106,26 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
     const video = videoRef.current;
     if (!video) return;
 
-    const onTime = () => setCurrentTime(video.currentTime);
+    const onTime = () => {
+      setCurrentTime(video.currentTime);
+
+      // Offers "Play next episode" once the remaining time drops inside the credits window,
+      // rather than waiting for the browser's `ended` event — there's no way to know where an
+      // episode's credits actually start without real content analysis (audio fingerprinting
+      // across a season, the way Plex/Jellyfin's intro-skip features work — a real background
+      // pipeline, not something the player can do live), so this is a duration-based heuristic
+      // instead: an admin-set per-series lead time when one exists, a fixed default otherwise.
+      if (
+        !nextCardDismissedRef.current &&
+        session.nextEpisodeId &&
+        !session.isLive &&
+        Number.isFinite(video.duration) &&
+        video.duration > 0
+      ) {
+        const leadSec = session.creditsLeadSec ?? DEFAULT_CREDITS_LEAD_SEC;
+        if (video.duration - video.currentTime <= leadSec) setNextCardTrigger('early');
+      }
+    };
     const onDuration = () => setDuration(Number.isFinite(video.duration) ? video.duration : 0);
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
@@ -106,7 +135,10 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
     };
     const onRateChange = () => setPlaybackRate(video.playbackRate);
     const onEnded = () => {
-      if (session.nextEpisodeId) setShowNextCard(true);
+      // Always upgrades to 'ended' (unlike the early trigger, this ignores
+      // nextCardDismissedRef) — dismissing the early offer, or a lead time short/zero enough that
+      // it never fired at all, still gets the real prompt once the episode has truly finished.
+      if (session.nextEpisodeId) setNextCardTrigger('ended');
     };
 
     video.addEventListener('timeupdate', onTime);
@@ -126,7 +158,7 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
       video.removeEventListener('ratechange', onRateChange);
       video.removeEventListener('ended', onEnded);
     };
-  }, [session.nextEpisodeId]);
+  }, [session.nextEpisodeId, session.creditsLeadSec, session.isLive]);
 
   // Progress heartbeat. Live has no meaningful resume position, so it is skipped.
   // The server call is still profile-scoped (anonymous viewers have no profile
@@ -372,10 +404,14 @@ export function VideoPlayer({ session: initial }: { session: PlaybackSession }) 
         </div>
       )}
 
-      {showNextCard && session.nextEpisodeId && (
+      {nextCardTrigger && session.nextEpisodeId && (
         <NextEpisodeCard
+          autoAdvance={nextCardTrigger === 'ended'}
           onPlay={() => router.replace(`/watch/episode/${session.nextEpisodeId}`)}
-          onDismiss={() => setShowNextCard(false)}
+          onDismiss={() => {
+            nextCardDismissedRef.current = true;
+            setNextCardTrigger(null);
+          }}
         />
       )}
 

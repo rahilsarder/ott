@@ -124,6 +124,8 @@ export const upsertTitleSchema = z.object({
   logoUrl: z.string().max(1000).nullable().default(null),
   trailerYoutubeId: youtubeIdSchema.nullable().default(null),
   streamPath: streamPathSchema.nullable().default(null),
+  /** SERIES only — see the Prisma field comment. Player falls back to a fixed default when null. */
+  creditsLeadSec: z.number().int().min(0).max(600).nullable().default(null),
   genreIds: z.array(z.string()).default([]),
   isPublished: z.boolean().default(false),
 });

@@ -183,6 +183,13 @@ model Title {
   trailerYoutubeId String?
   /// Flussonic stream name for MOVIE titles. SERIES carry it per-episode.
   streamPath       String?
+  /// SERIES only. Seconds before an episode's own end when its credits
+  /// typically start — drives how early the player offers "Play next
+  /// episode". A duration (not an absolute timestamp) because it needs to
+  /// generalize across episodes of different lengths within the same show;
+  /// credits length is far more consistent per-series than an absolute
+  /// start time would be. Null falls back to a fixed default in the player.
+  creditsLeadSec   Int?
   /// TMDB id this title was imported from. Scoped by `type`, since TMDB numbers
   /// movies and TV shows in separate namespaces and ids do collide.
   tmdbId           Int?

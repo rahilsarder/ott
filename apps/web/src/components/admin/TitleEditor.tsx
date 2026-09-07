@@ -28,6 +28,7 @@ export const BLANK_TITLE: UpsertTitleInput = {
   logoUrl: null,
   trailerYoutubeId: null,
   streamPath: null,
+  creditsLeadSec: null,
   genreIds: [],
   isPublished: false,
 };
@@ -168,6 +169,23 @@ export function TitleEditor({ titleId, initial }: Props) {
             onChange={(e) => set('durationSec', e.target.value ? Number(e.target.value) * 60 : null)}
           />
         </Field>
+
+        {draft.type === 'SERIES' && (
+          <Field
+            label="Credits lead time (seconds)"
+            hint="How early to offer &ldquo;Play next episode&rdquo;, counted back from each episode's own end. Credits length is usually consistent across a show even though episode lengths aren't, so this is one value for the whole series. Leave blank to use the player's default (60s)."
+          >
+            <input
+              type="number"
+              min={0}
+              max={600}
+              className={inputClass}
+              value={draft.creditsLeadSec ?? ''}
+              onChange={(e) => set('creditsLeadSec', e.target.value ? Number(e.target.value) : null)}
+              placeholder="60"
+            />
+          </Field>
+        )}
 
         <div className="md:col-span-2">
           <Field label="Synopsis">

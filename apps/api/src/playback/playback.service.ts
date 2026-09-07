@@ -57,6 +57,7 @@ export class PlaybackService {
       backdropUrl: title.backdropUrl,
       subtitles,
       nextEpisodeId: null,
+      creditsLeadSec: null,
     };
   }
 
@@ -93,6 +94,7 @@ export class PlaybackService {
       backdropUrl: episode.stillUrl ?? episode.title.backdropUrl,
       subtitles,
       nextEpisodeId: await this.findNextEpisodeId(episode.titleId, episode.season.number, episode.number),
+      creditsLeadSec: episode.title.creditsLeadSec,
     };
   }
 
@@ -124,6 +126,7 @@ export class PlaybackService {
       backdropUrl: channel.logoUrl,
       subtitles: [],
       nextEpisodeId: null,
+      creditsLeadSec: null,
     };
   }
 

@@ -5,27 +5,46 @@ import { PlayIcon } from '@/components/icons';
 
 const COUNTDOWN_SEC = 10;
 
-export function NextEpisodeCard({ onPlay, onDismiss }: { onPlay: () => void; onDismiss: () => void }) {
+interface Props {
+  onPlay: () => void;
+  onDismiss: () => void;
+  /**
+   * Starts a countdown that auto-advances to the next episode. Only
+   * appropriate once the video has genuinely finished — the early offer
+   * (still inside the credits-lead window, before the real `ended` event)
+   * is a guess at timing, not a fact, so it must never force playback
+   * forward on its own; it just sits there until the viewer acts or the
+   * episode actually ends.
+   */
+  autoAdvance: boolean;
+}
+
+export function NextEpisodeCard({ onPlay, onDismiss, autoAdvance }: Props) {
   const [remaining, setRemaining] = useState(COUNTDOWN_SEC);
 
   useEffect(() => {
+    if (!autoAdvance) return;
     const timer = setInterval(() => setRemaining((v) => v - 1), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [autoAdvance]);
 
   useEffect(() => {
-    if (remaining <= 0) onPlay();
-  }, [remaining, onPlay]);
+    if (autoAdvance && remaining <= 0) onPlay();
+  }, [autoAdvance, remaining, onPlay]);
 
-  const progress = ((COUNTDOWN_SEC - remaining) / COUNTDOWN_SEC) * 100;
+  const progress = autoAdvance ? ((COUNTDOWN_SEC - remaining) / COUNTDOWN_SEC) * 100 : 0;
 
   return (
     <div className="chamfer-md animate-rise absolute right-6 bottom-28 z-30 w-80 overflow-hidden border border-hairline bg-night-2/95 backdrop-blur">
-      <div className="h-1 bg-bone/15">
-        <div className="h-full bg-brass transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%` }} />
-      </div>
+      {autoAdvance && (
+        <div className="h-1 bg-bone/15">
+          <div className="h-full bg-brass transition-[width] duration-1000 ease-linear" style={{ width: `${progress}%` }} />
+        </div>
+      )}
       <div className="space-y-3 p-5">
-        <p className="label-mono text-ash">Next episode in {Math.max(0, remaining)}s</p>
+        <p className="label-mono text-ash">
+          {autoAdvance ? `Next episode in ${Math.max(0, remaining)}s` : 'Up next'}
+        </p>
         <div className="flex gap-2">
           <button
             onClick={onPlay}
@@ -38,7 +57,7 @@ export function NextEpisodeCard({ onPlay, onDismiss }: { onPlay: () => void; onD
             onClick={onDismiss}
             className="chamfer-sm focus-brass bg-bone/10 px-4 py-2 font-semibold text-bone transition hover:bg-bone/20"
           >
-            Cancel
+            {autoAdvance ? 'Cancel' : 'Dismiss'}
           </button>
         </div>
       </div>
