@@ -573,7 +573,16 @@ nginx -t && systemctl reload nginx
 
 pm2 start ops/ecosystem.config.js
 pm2 save
-pm2 startup systemd -u root --hp /root
+# "pm2 startup" does NOT install the systemd service itself — it only PRINTS
+# the exact command to do that (with this box's real node/PATH baked in) and
+# expects a human to copy-paste and run it. Left as a bare call, the service
+# is never actually registered and nothing restarts pm2 on reboot — verified
+# locally: running it produces a "[PM2] To setup the Startup Script,
+# copy/paste the following command: sudo env PATH=... pm2 startup ..." line
+# and does nothing else on its own. Piping that last line to bash is the
+# standard fix: it actually runs the install command instead of just
+# printing it.
+pm2 startup systemd -u root --hp /root | tail -1 | bash
 
 if [[ "${PROTOCOL}" == https ]]; then
   apt install -y -qq certbot python3-certbot-nginx

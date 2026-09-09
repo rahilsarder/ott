@@ -49,23 +49,32 @@ export function useLocalContinueWatching(enabled: boolean): ContinueItem[] {
 
   return useMemo(() => {
     if (!hydrated) return [];
-    const byKey = new Map(eligible.map((item) => [`${item.kind}:${item.id}`, item]));
-    return hydrated
-      .map((result): ContinueItem | null => {
-        // Hydration silently drops ids that no longer resolve (deleted/unpublished) —
-        // a stale local entry for one of those just never gets rendered.
-        const local = byKey.get(`${result.kind}:${result.id}`);
-        if (!local) return null;
-        return {
-          kind: result.kind,
-          id: result.id,
-          title: result.title,
-          label: result.label,
-          positionSec: local.positionSec,
-          durationSec: local.durationSec,
-          percent: local.durationSec > 0 ? Math.round((local.positionSec / local.durationSec) * 100) : 0,
-        };
-      })
-      .filter((item): item is ContinueItem => item !== null);
+    const hydratedByKey = new Map(hydrated.map((result) => [`${result.kind}:${result.id}`, result]));
+    const seenTitleIds = new Set<string>();
+    const items: ContinueItem[] = [];
+    // Walk `eligible`, not `hydrated` — eligible is already ordered most-recently-
+    // watched first (see listLocalProgress), and the hydration endpoint gives no
+    // guarantee its response preserves that request order. Deduping by title id
+    // here (mirroring ProgressService.continueWatching's `distinct: ['titleId']`
+    // server-side) keeps only the latest in-progress episode per series; a movie's
+    // title id is unique to itself, so this is a no-op for movies.
+    for (const local of eligible) {
+      const result = hydratedByKey.get(`${local.kind}:${local.id}`);
+      // Hydration silently drops ids that no longer resolve (deleted/unpublished) —
+      // a stale local entry for one of those just never gets rendered.
+      if (!result) continue;
+      if (seenTitleIds.has(result.title.id)) continue;
+      seenTitleIds.add(result.title.id);
+      items.push({
+        kind: result.kind,
+        id: result.id,
+        title: result.title,
+        label: result.label,
+        positionSec: local.positionSec,
+        durationSec: local.durationSec,
+        percent: local.durationSec > 0 ? Math.round((local.positionSec / local.durationSec) * 100) : 0,
+      });
+    }
+    return items;
   }, [hydrated, eligible]);
 }
