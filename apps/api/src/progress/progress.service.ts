@@ -56,6 +56,13 @@ export class ProgressService {
     const rows = await this.prisma.watchProgress.findMany({
       where: { profileId, completedAt: null, durationSec: { gt: 0 } },
       orderBy: { updatedAt: 'desc' },
+      // One row per titleId, not per episode — without this, a series with
+      // three in-progress episodes produced three separate rail entries.
+      // `distinct` keeps the first row Prisma sees per titleId, which (given
+      // the desc ordering above) is the most recently watched one; a movie
+      // only ever has a single WatchProgress row per titleId in the first
+      // place (its episodeKey is always ''), so this is a no-op for movies.
+      distinct: ['titleId'],
       take: limit * 2,
       include: {
         title: { select: titleCardSelect },
