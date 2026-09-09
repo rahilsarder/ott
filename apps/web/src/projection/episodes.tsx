@@ -57,12 +57,22 @@ export function SeasonPicker({
  * beats scrolling a horizontal row, so the still moves left and the text sits
  * beside it. A rail would be actively wrong here.
  */
-export function EpisodeRow({ episode, href }: { episode: EpisodeSummary; href: string }) {
+export function EpisodeRow({
+  episode,
+  href,
+  localProgressSec,
+}: {
+  episode: EpisodeSummary;
+  href: string;
+  /** A signed-in profile's own server-side progress (episode.progressSec) is
+   *  authoritative when present — it's cross-device and always at least as
+   *  fresh as this device's local copy. This is the fallback for an
+   *  anonymous viewer, who has no server-side progress at all. */
+  localProgressSec?: number;
+}) {
   const awaiting = !episode.playable;
-  const percent =
-    episode.progressSec && episode.durationSec
-      ? Math.min(100, (episode.progressSec / episode.durationSec) * 100)
-      : 0;
+  const progressSec = episode.progressSec ?? localProgressSec;
+  const percent = progressSec && episode.durationSec ? Math.min(100, (progressSec / episode.durationSec) * 100) : 0;
   const inProgress = percent > 2 && percent < 95;
 
   const body = (
@@ -78,6 +88,9 @@ export function EpisodeRow({ episode, href }: { episode: EpisodeSummary; href: s
         />
         {percent > 0 && (
           <span className="absolute inset-x-0 bottom-0 z-3 h-0.5 bg-bone/15">
+            {/* Same brass accent as the "Carry on watching" rail's own progress
+                bar (Progress, in cards.tsx) — one consistent "already watched"
+                color across the site rather than a one-off for this row. */}
             <span className="block h-full bg-brass" style={{ width: `${percent}%` }} />
           </span>
         )}
@@ -92,8 +105,8 @@ export function EpisodeRow({ episode, href }: { episode: EpisodeSummary; href: s
           <span className="label-mono ml-auto shrink-0 text-ash-dim">
             {awaiting
               ? 'Awaiting stream'
-              : inProgress && episode.durationSec && episode.progressSec
-                ? `${formatDuration(episode.durationSec - episode.progressSec)} left`
+              : inProgress && episode.durationSec && progressSec
+                ? `${formatDuration(episode.durationSec - progressSec)} left`
                 : formatDuration(episode.durationSec)}
           </span>
         </span>

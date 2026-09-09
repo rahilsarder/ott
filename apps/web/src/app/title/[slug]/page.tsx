@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import type { Paginated, TitleCard as TitleCardModel, TitleDetail } from '@ott/shared';
 import { api } from '@/lib/api';
+import { getLocalProgress } from '@/lib/local-progress';
 import { useSession } from '@/lib/session';
 import { useWatchlist } from '@/lib/use-watchlist';
 import { loadYoutubeIframeApi, type YoutubePlayer } from '@/lib/youtube-iframe-api';
@@ -37,6 +38,25 @@ function TitleView({ slug }: { slug: string }) {
     queryKey: ['title', slug, profile?.id],
     queryFn: () => api<TitleDetail>(`/catalog/titles/${slug}`),
   });
+
+  // Server-side episode.progressSec (already in the response above) only
+  // exists for a signed-in profile — an anonymous viewer's progress lives in
+  // this device's localStorage instead (see EpisodeRow, which prefers the
+  // server value and falls back to this). Read after mount, not during
+  // render: localStorage doesn't exist during SSR, and reading it
+  // synchronously here would produce a server/client hydration mismatch.
+  const [localEpisodeProgress, setLocalEpisodeProgress] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (!title) return;
+    const map = new Map<string, number>();
+    for (const season of title.seasons) {
+      for (const episode of season.episodes) {
+        const local = getLocalProgress('episode', episode.id);
+        if (local) map.set(episode.id, local.positionSec);
+      }
+    }
+    setLocalEpisodeProgress(map);
+  }, [title]);
 
   const playHref = title?.resume
     ? `/watch/${title.resume.kind}/${title.resume.id}`
@@ -80,7 +100,12 @@ function TitleView({ slug }: { slug: string }) {
 
               <div className="-mx-4 flex flex-col md:mx-0">
                 {season?.episodes.map((episode) => (
-                  <EpisodeRow key={episode.id} episode={episode} href={`/watch/episode/${episode.id}`} />
+                  <EpisodeRow
+                    key={episode.id}
+                    episode={episode}
+                    href={`/watch/episode/${episode.id}`}
+                    localProgressSec={localEpisodeProgress.get(episode.id)}
+                  />
                 ))}
               </div>
             </section>
